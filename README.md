@@ -61,30 +61,18 @@ buscacampus-project/
     ├── package.json
     └── server.js
 ```
+El archivo `docs/mer-buscacampus.mdj` contiene el modelo entidad–relación editable realizado en StarUML. También se incluye una versión visual exportada como imagen para facilitar su lectura directamente desde GitHub.
 
-El archivo `.mdj` es una copia editable del diagrama de StarUML suministrado con el proyecto. [`docs/mer.md`](docs/mer.md) contiene un diagrama Mermaid legible en GitHub y las cardinalidades; [`server/sql/schema.sql`](server/sql/schema.sql) lleva ese modelo a tablas, claves y restricciones. El requisito de **uno o más archivos por reporte** se exige en la futura operación transaccional de creación: una FK no puede imponer por sí sola un número mínimo de hijos.
+![Modelo entidad–relación de BuscaCampus](docs/mer-buscacampus.png)
 
-## Ejecución local
-
-Requisitos: Node.js 20.19 o superior (o 22.12 o superior), npm y PostgreSQL 14 o superior. En PowerShell con políticas de ejecución restrictivas, usa `npm.cmd` en lugar de `npm`.
-
-1. Crea una base de datos vacía llamada `buscacampus` en PostgreSQL. Por ejemplo, con `createdb -U postgres buscacampus`.
-2. Ejecuta `psql -U postgres -d buscacampus -f server/sql/schema.sql` y luego `psql -U postgres -d buscacampus -f server/sql/seed.sql` desde la raíz del proyecto.
-3. Copia `server/.env.example` como `server/.env` y ajusta `DATABASE_URL`. Cambia la contraseña de ejemplo antes de usar una base de datos compartida.
-4. En una terminal: `cd server`, `npm install`, `npm run dev`.
-5. En otra terminal: `cd client`, `npm install`, `npm run dev`. Abre `http://localhost:5173`.
-6. Visita `http://localhost:4000/api/v1/health`. La respuesta esperada con PostgreSQL disponible es HTTP 200 con `status: "OK"` y `database.connected: true`. Una conexión fallida devuelve HTTP 503 y `database.connected: false`.
-
-En el cliente, `VITE_API_URL` puede configurarse en `client/.env` si la API usa otra dirección. La landing es navegable sin la API, porque sus cuatro tarjetas son **datos de demostración**. Los filtros por texto, categoría y ubicación sí funcionan sobre esos datos. Los formularios muestran validación del navegador y confirmación de maqueta; no envían credenciales ni crean cuentas.
+El archivo [`docs/mer.md`](docs/mer.md) contiene una versión textual alternativa del modelo y sus cardinalidades. El archivo [`server/sql/schema.sql`](server/sql/schema.sql) lleva este modelo a tablas, claves y restricciones.
 
 ## Alcance de la entrega
 
 | Requisito | Evidencia |
 | --- | --- |
 | Problema, alcance y arquitectura | Este README |
-| Diagrama E/R o NoSQL | `docs/mer.md`, `docs/mer-buscacampus.mdj`, `server/sql/schema.sql` |
+| Diagrama E/R o NoSQL | `docs/mer-buscacampus.png`, `docs/mer-buscacampus.mdj`, `docs/mer.md`, `server/sql/schema.sql` |
 | Repositorio base frontend/backend | `client/`, `server/`, `.gitignore`, ejemplos de entorno |
 | `/health` y consulta a la base | `server/src/controllers/healthController.js`; las pruebas automáticas cubren respuesta y falla de la consulta. La verificación HTTP 200 contra PostgreSQL requiere ejecutar los pasos anteriores en una instancia disponible. |
 | Landing y Login/Registro responsive | `client/src/pages/`, `client/src/styles.css` |
-
-Los datos de muestra no representan objetos reales de la UAO. El registro público se modela con rol `Usuario`; `Administrador` requiere asignación interna para evitar que alguien obtenga ese privilegio desde el formulario.
