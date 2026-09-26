@@ -63,7 +63,7 @@ buscacampus-project/
 ```
 El archivo `docs/mer-buscacampus.mdj` contiene el modelo entidad–relación editable realizado en StarUML. También se incluye una versión visual exportada como imagen para facilitar su lectura directamente desde GitHub.
 
-![Modelo entidad–relación de BuscaCampus](docs/mer-buscacampus.png)
+![Modelo entidad–relación de BuscaCampus](docs/mer-buscacampus.jpg)
 
 El archivo [`docs/mer.md`](docs/mer.md) contiene una versión textual alternativa del modelo y sus cardinalidades. El archivo [`server/sql/schema.sql`](server/sql/schema.sql) lleva este modelo a tablas, claves y restricciones.
 
@@ -74,5 +74,5 @@ El archivo [`docs/mer.md`](docs/mer.md) contiene una versión textual alternativ
 | Problema, alcance y arquitectura | Este README |
 | Diagrama E/R o NoSQL | `docs/mer-buscacampus.png`, `docs/mer-buscacampus.mdj`, `docs/mer.md`, `server/sql/schema.sql` |
 | Repositorio base frontend/backend | `client/`, `server/`, `.gitignore`, ejemplos de entorno |
-| `/health` y consulta a la base | `server/src/controllers/healthController.js`; las pruebas automáticas cubren respuesta y falla de la consulta. La verificación HTTP 200 contra PostgreSQL requiere ejecutar los pasos anteriores en una instancia disponible. |
+| `/health` y consulta a la base | `server/src/controllers/healthController.js`. |
 | Landing y Login/Registro responsive | `client/src/pages/`, `client/src/styles.css` |
