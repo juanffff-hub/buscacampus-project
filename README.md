@@ -149,3 +149,10 @@ La carpeta `uploads/` está preparada y excluida de Git salvo el archivo que pre
 | `/health` y consulta a PostgreSQL | `server/src/controllers/healthController.js` |
 | Esquema y datos iniciales | `server/sql/schema.sql`, `server/sql/seed.sql` |
 | Landing y Login/Registro responsive | `client/src/pages/`, `client/src/styles.css` |
+
+### Evidencia de la prueba
+
+La siguiente captura muestra la respuesta exitosa del endpoint `/api/v1/health`
+con PostgreSQL conectado:
+
+![Prueba de conexión entre el backend y PostgreSQL](docs/health-postgresql.png)
