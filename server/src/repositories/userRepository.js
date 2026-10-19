@@ -10,4 +10,27 @@ async function createUser({ nombreCompleto, correoElectronico, contrasenaHash })
   return result.rows[0];
 }
 
-module.exports = { createUser };
+async function findByEmail(correoElectronico) {
+  const result = await pool.query(
+    `SELECT id, nombre_completo, correo_electronico, contrasena_hash,
+            rol, estado, fecha_registro
+     FROM usuarios
+     WHERE LOWER(correo_electronico) = LOWER($1)
+     LIMIT 1`,
+    [correoElectronico],
+  );
+  return result.rows[0] || null;
+}
+
+async function findById(id) {
+  const result = await pool.query(
+    `SELECT id, nombre_completo, correo_electronico, rol, estado, fecha_registro
+     FROM usuarios
+     WHERE id = $1
+     LIMIT 1`,
+    [id],
+  );
+  return result.rows[0] || null;
+}
+
+module.exports = { createUser, findByEmail, findById };

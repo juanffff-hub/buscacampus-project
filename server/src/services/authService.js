@@ -1,4 +1,5 @@
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const ApiError = require('../errors/ApiError');
 const userRepository = require('../repositories/userRepository');
 
@@ -35,4 +36,30 @@ async function registerUser({ nombreCompleto, correoElectronico, contrasena }) {
   }
 }
 
-module.exports = { registerUser, toPublicUser };
+async function authenticateUser(correoElectronico, contrasena) {
+  const user = await userRepository.findByEmail(correoElectronico);
+  const validPassword = user
+    ? await bcrypt.compare(contrasena, user.contrasena_hash)
+    : false;
+
+  if (!user || user.estado !== 'Activo' || !validPassword) {
+    throw new ApiError(401, 'INVALID_CREDENTIALS', 'Correo o contraseña incorrectos.');
+  }
+
+  return toPublicUser(user);
+}
+
+function issueSessionToken(userId) {
+  return jwt.sign(
+    { sub: String(userId) },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES_IN || '8h' },
+  );
+}
+
+module.exports = {
+  registerUser,
+  authenticateUser,
+  issueSessionToken,
+  toPublicUser,
+};

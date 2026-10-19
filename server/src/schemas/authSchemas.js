@@ -13,4 +13,16 @@ const registrationSchema = z.object({
   contrasena: z.string().min(8),
 }).strict();
 
-module.exports = { registrationSchema };
+const loginSchema = z.object({
+  correoElectronico: z
+    .string()
+    .trim()
+    .email()
+    .transform(value => value.toLowerCase())
+    .refine(value => value.endsWith('@uao.edu.co'), {
+      message: 'Usa un correo institucional @uao.edu.co.',
+    }),
+  contrasena: z.string().min(8),
+}).strict();
+
+module.exports = { registrationSchema, loginSchema };
