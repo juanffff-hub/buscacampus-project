@@ -22,6 +22,7 @@ const registrationInput = {
 };
 const loginUrl = '/api/v1/auth/login';
 const meUrl = '/api/v1/auth/me';
+const logoutUrl = '/api/v1/auth/logout';
 const jwtSecret = 'test-only-secret-with-more-than-thirty-two-bytes';
 
 test('POST /api/v1/auth/registro crea el usuario y solo devuelve datos públicos', async () => {
@@ -169,7 +170,10 @@ test('POST /api/v1/auth/login crea cookie HttpOnly y GET /auth/me restaura la se
       assert.equal(loginResponse.status, 200);
       assert.equal(loginBody.success, true);
       assert.equal(loginBody.data.user.correoElectronico, 'ana.perez@uao.edu.co');
-      assert.doesNotMatch(JSON.stringify(loginBody), /eyJ[A-Za-z0-9_-]+\./);
+      assert.doesNotMatch(
+        JSON.stringify(loginBody),
+        /contrasena_hash|eyJ[A-Za-z0-9_-]+\./,
+      );
       assert.match(setCookie, /HttpOnly/i);
       assert.match(setCookie, /SameSite=Lax/i);
       assert.match(setCookie, /Path=\//i);
@@ -205,4 +209,81 @@ test('GET /api/v1/auth/me requiere una sesión válida', async () => {
     assert.equal(body.error.code, 'UNAUTHENTICATED');
     assert.doesNotMatch(JSON.stringify(body), /JWT|token/i);
   });
+});
+
+test('POST /api/v1/auth/login rechaza correo inexistente, contraseña incorrecta e inactivo', async () => {
+  const originalQuery = pool.query;
+  const passwordHash = await bcrypt.hash(registrationInput.contrasena, 4);
+  const activeAccount = {
+    id: '42',
+    nombre_completo: 'Ana Pérez',
+    correo_electronico: 'ana.perez@uao.edu.co',
+    contrasena_hash: passwordHash,
+    rol: 'Usuario',
+    estado: 'Activo',
+    fecha_registro: '2026-10-19T12:00:00.000Z',
+  };
+  let scenario = 'missing';
+  pool.query = async sql => {
+    assert.ok(sql.includes('WHERE LOWER(correo_electronico) = LOWER($1)'));
+    if (scenario === 'missing') return { rows: [] };
+    return {
+      rows: [{
+        ...activeAccount,
+        estado: scenario === 'inactive' ? 'Inactivo' : 'Activo',
+      }],
+    };
+  };
+
+  try {
+    await withServer(async url => {
+      const cases = [
+        { name: 'usuario inexistente', password: registrationInput.contrasena, scenario: 'missing' },
+        { name: 'contraseña incorrecta', password: 'otra-clave-segura', scenario: 'wrong-password' },
+        { name: 'usuario inactivo', password: registrationInput.contrasena, scenario: 'inactive' },
+      ];
+
+      for (const currentCase of cases) {
+        scenario = currentCase.scenario;
+        const response = await fetch(`${url}${loginUrl}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            correoElectronico: 'ANA.PEREZ@UAO.EDU.CO',
+            contrasena: currentCase.password,
+          }),
+        });
+        const body = await response.json();
+        assert.equal(response.status, 401, currentCase.name);
+        assert.equal(body.error.code, 'INVALID_CREDENTIALS', currentCase.name);
+        assert.equal(body.error.message, 'Correo o contraseña incorrectos.');
+        assert.doesNotMatch(JSON.stringify(body), /contrasena_hash|database|SQL/i);
+      }
+    });
+  } finally {
+    pool.query = originalQuery;
+  }
+});
+
+test('POST /api/v1/auth/logout elimina la cookie y responde 204', async () => {
+  const originalCookieSecure = process.env.COOKIE_SECURE;
+  process.env.COOKIE_SECURE = 'true';
+  try {
+    await withServer(async url => {
+      const response = await fetch(`${url}${logoutUrl}`, { method: 'POST' });
+      const setCookie = response.headers.get('set-cookie');
+
+      assert.equal(response.status, 204);
+      assert.equal(await response.text(), '');
+      assert.match(setCookie, /^buscacampus_session=/);
+      assert.match(setCookie, /HttpOnly/i);
+      assert.match(setCookie, /SameSite=Lax/i);
+      assert.match(setCookie, /Path=\//i);
+      assert.match(setCookie, /; Secure/i);
+      assert.match(setCookie, /Expires=Thu, 01 Jan 1970 00:00:00 GMT/i);
+    });
+  } finally {
+    if (originalCookieSecure === undefined) delete process.env.COOKIE_SECURE;
+    else process.env.COOKIE_SECURE = originalCookieSecure;
+  }
 });

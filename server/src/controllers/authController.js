@@ -31,4 +31,14 @@ function me(req, res) {
   return sendSuccess(res, { user: req.user });
 }
 
-module.exports = { register, login, me };
+function logout(req, res) {
+  res.clearCookie(SESSION_COOKIE, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.COOKIE_SECURE?.toLowerCase() === 'true',
+    path: '/',
+  });
+  return res.status(204).end();
+}
+
+module.exports = { register, login, me, logout };
