@@ -22,7 +22,10 @@ export default function Login() {
         correoElectronico: formData.get("email").trim().toLowerCase(),
         contrasena: formData.get("password"),
       });
-      const destination = location.state?.from?.pathname || "/dashboard";
+      const requestedLocation = location.state?.from;
+      const destination = requestedLocation?.pathname
+        ? `${requestedLocation.pathname}${requestedLocation.search || ""}${requestedLocation.hash || ""}`
+        : "/dashboard";
       navigate(destination, { replace: true });
     } catch (requestError) {
       setError(requestError.message || "No fue posible iniciar sesión.");
