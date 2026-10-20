@@ -1,16 +1,39 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext.jsx";
 
 export default function Register() {
-  const [submitted, setSubmitted] = useState(false);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+  const navigate = useNavigate();
+  const { register } = useAuth();
   const mismatch = confirm.length > 0 && confirm !== password;
-  function handleSubmit(event) {
+
+  async function handleSubmit(event) {
     event.preventDefault();
-    if (mismatch) return;
-    if (event.currentTarget.reportValidity()) setSubmitted(true);
+    if (isSubmitting || mismatch || !event.currentTarget.reportValidity()) return;
+
+    const formData = new FormData(event.currentTarget);
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await register({
+        nombreCompleto: formData.get("name").trim(),
+        correoElectronico: formData.get("email").trim().toLowerCase(),
+        contrasena: formData.get("password"),
+      });
+      navigate("/login", {
+        replace: true,
+        state: { message: "Cuenta creada. Ya puedes iniciar sesión." },
+      });
+    } catch (requestError) {
+      setError(requestError.message || "No fue posible crear la cuenta.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -60,7 +83,7 @@ export default function Register() {
               type="email"
               placeholder="nombre@uao.edu.co"
               autoComplete="email"
-              pattern=".+@uao\.edu\.co"
+              pattern=".+@[Uu][Aa][Oo]\.[Ee][Dd][Uu]\.[Cc][Oo]"
               title="Usa tu correo institucional @uao.edu.co"
               required
             />
@@ -84,15 +107,13 @@ export default function Register() {
                 autoComplete="new-password"
                 minLength="8"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(event) => setPassword(event.target.value)}
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                aria-label={
-                  showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
-                }
+                aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
               >
                 {showPassword ? "Ocultar" : "Mostrar"}
               </button>
@@ -105,7 +126,7 @@ export default function Register() {
               placeholder="Repite tu contraseña"
               autoComplete="new-password"
               value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
+              onChange={(event) => setConfirm(event.target.value)}
               aria-invalid={mismatch}
               aria-describedby={mismatch ? "password-error" : undefined}
               required
@@ -115,13 +136,16 @@ export default function Register() {
                 Las contraseñas no coinciden.
               </small>
             )}
-            <button className="button button-primary auth-submit" type="submit">
-              Crear cuenta <span aria-hidden="true">→</span>
+            <button
+              className="button button-primary auth-submit"
+              type="submit"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Creando cuenta..." : "Crear cuenta"} <span aria-hidden="true">→</span>
             </button>
-            {submitted && (
-              <p role="status" className="form-notice">
-                Vista de demostración: el registro estará disponible en una
-                próxima entrega.
+            {error && (
+              <p role="alert" className="field-error">
+                {error}
               </p>
             )}
           </form>
