@@ -1,4 +1,10 @@
 const reportRepository = require('../repositories/reportRepository');
+const ApiError = require('../errors/ApiError');
+const path = require('node:path');
+const {
+  deleteUploadedFile,
+  sanitizeOriginalName,
+} = require('../middleware/reportUpload');
 
 function toPublicReport(row) {
   return {
@@ -52,4 +58,30 @@ async function getReport(id) {
   return row ? toPublicReport(row) : null;
 }
 
-module.exports = { listReports, getReport, toPublicReport };
+async function createReport(input, uploadedFile, userId) {
+  const file = {
+    originalName: sanitizeOriginalName(uploadedFile.originalname),
+    filename: uploadedFile.filename,
+    mimeType: uploadedFile.mimetype,
+    extension: path.extname(uploadedFile.filename),
+    size: uploadedFile.size,
+  };
+
+  try {
+    const row = await reportRepository.createReport(input, file, userId);
+    return toPublicReport(row);
+  } catch (error) {
+    try {
+      await deleteUploadedFile(uploadedFile.filename);
+    } catch {
+      // Preserve the database failure; the API response never exposes paths.
+    }
+
+    if (error.code === '23503') {
+      throw new ApiError(400, 'INVALID_REFERENCE', 'La categoría o ubicación seleccionada no existe.');
+    }
+    throw error;
+  }
+}
+
+module.exports = { listReports, getReport, createReport, toPublicReport };

@@ -102,8 +102,8 @@ async function listReports(filters, userId) {
   };
 }
 
-async function findReportById(id) {
-  const result = await pool.query(
+async function findReportById(id, executor = pool) {
+  const result = await executor.query(
     `${REPORT_SELECT}
      WHERE r.id = $1
      ORDER BY file.fecha_subida ASC NULLS LAST, file.id ASC NULLS LAST
@@ -113,4 +113,67 @@ async function findReportById(id) {
   return result.rows[0] || null;
 }
 
-module.exports = { listReports, findReportById };
+async function createReport(input, file, userId) {
+  const client = await pool.connect();
+  let transactionOpen = false;
+  try {
+    await client.query('BEGIN');
+    transactionOpen = true;
+
+    const created = await client.query(
+      `INSERT INTO reportes_objetos
+         (usuario_creador_id, categoria_id, ubicacion_id, titulo, descripcion,
+          tipo_reporte, fecha_hora_evento)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id::text AS id`,
+      [
+        userId,
+        input.categoriaId,
+        input.ubicacionId,
+        input.titulo,
+        input.descripcion,
+        input.tipoReporte,
+        input.fechaHoraEvento,
+      ],
+    );
+    const reportId = created.rows[0]?.id;
+    if (!reportId) throw new Error('Report insert did not return an id.');
+
+    await client.query(
+      `INSERT INTO archivos_metadatos
+         (reporte_id, usuario_autor_id, nombre_original, nombre_fisico,
+          ruta_url, mime_type, extension, peso_bytes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        reportId,
+        userId,
+        file.originalName,
+        file.filename,
+        `/uploads/${file.filename}`,
+        file.mimeType,
+        file.extension,
+        file.size,
+      ],
+    );
+
+    const report = await findReportById(reportId, client);
+    if (!report) throw new Error('Created report could not be read in its transaction.');
+
+    await client.query('COMMIT');
+    transactionOpen = false;
+    return report;
+  } catch (error) {
+    if (transactionOpen) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // Keep the original database error for the API's sanitized error handler.
+      }
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = { listReports, findReportById, createReport };

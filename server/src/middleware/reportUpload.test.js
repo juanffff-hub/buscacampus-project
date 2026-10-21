@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const express = require('express');
 const app = require('../app');
@@ -39,10 +40,6 @@ function multipartFile(buffer, mimeType, name = 'campus-image.bin') {
   const form = new FormData();
   form.append('archivo', new Blob([buffer], { type: mimeType }), name);
   return form;
-}
-
-async function storedFileNames() {
-  return (await fs.readdir(UPLOADS_DIR)).filter(name => name !== '.gitkeep');
 }
 
 test('almacena JPEG, PNG y WebP con UUID, extensión MIME y acceso estático /uploads', async () => {
@@ -102,42 +99,58 @@ test('almacena JPEG, PNG y WebP con UUID, extensión MIME y acceso estático /up
 });
 
 test('rechaza MIME no permitido y contenido cuya firma no coincide', async () => {
-  const before = await storedFileNames();
-  await withServer(uploadHarness, async url => {
-    const unsupportedResponse = await fetch(`${url}/upload`, {
-      method: 'POST',
-      body: multipartFile(Buffer.from('not an image'), 'image/gif', 'anim.gif'),
-    });
-    const unsupportedBody = await unsupportedResponse.json();
-    assert.equal(unsupportedResponse.status, 400);
-    assert.equal(unsupportedBody.error.code, 'UNSUPPORTED_FILE_TYPE');
+  const originalRandomUUID = crypto.randomUUID;
+  const uploadId = 'bb5ddc6a-bd13-4985-924c-fcbeb6cc1ef4';
+  await assert.rejects(fs.access(resolveUploadPath(`${uploadId}.png`)), { code: 'ENOENT' });
+  crypto.randomUUID = () => uploadId;
+  try {
+    await withServer(uploadHarness, async url => {
+      const unsupportedResponse = await fetch(`${url}/upload`, {
+        method: 'POST',
+        body: multipartFile(Buffer.from('not an image'), 'image/gif', 'anim.gif'),
+      });
+      const unsupportedBody = await unsupportedResponse.json();
+      assert.equal(unsupportedResponse.status, 400);
+      assert.equal(unsupportedBody.error.code, 'UNSUPPORTED_FILE_TYPE');
 
-    const invalidContentResponse = await fetch(`${url}/upload`, {
-      method: 'POST',
-      body: multipartFile(Buffer.from('not a png'), 'image/png', 'fake.png'),
+      const invalidContentResponse = await fetch(`${url}/upload`, {
+        method: 'POST',
+        body: multipartFile(Buffer.from('not a png'), 'image/png', 'fake.png'),
+      });
+      const invalidContentBody = await invalidContentResponse.json();
+      assert.equal(invalidContentResponse.status, 400);
+      assert.equal(invalidContentBody.error.code, 'INVALID_IMAGE_CONTENT');
     });
-    const invalidContentBody = await invalidContentResponse.json();
-    assert.equal(invalidContentResponse.status, 400);
-    assert.equal(invalidContentBody.error.code, 'INVALID_IMAGE_CONTENT');
-  });
-  assert.deepEqual(await storedFileNames(), before);
+    await assert.rejects(fs.access(resolveUploadPath(`${uploadId}.png`)), { code: 'ENOENT' });
+  } finally {
+    crypto.randomUUID = originalRandomUUID;
+    await deleteUploadedFile(`${uploadId}.png`);
+  }
 });
 
 test('limita el archivo a 5 MB y convierte el error de Multer a HTTP 413', async () => {
-  const before = await storedFileNames();
+  const originalRandomUUID = crypto.randomUUID;
+  const uploadId = 'a3b7a48d-a30d-4247-baa6-60c8a4e4795e';
+  await assert.rejects(fs.access(resolveUploadPath(`${uploadId}.jpg`)), { code: 'ENOENT' });
+  crypto.randomUUID = () => uploadId;
   const tooLarge = Buffer.alloc(MAX_FILE_SIZE + 1);
   tooLarge.set([0xff, 0xd8, 0xff]);
-  await withServer(uploadHarness, async url => {
-    const response = await fetch(`${url}/upload`, {
-      method: 'POST',
-      body: multipartFile(tooLarge, 'image/jpeg', 'large.jpg'),
+  try {
+    await withServer(uploadHarness, async url => {
+      const response = await fetch(`${url}/upload`, {
+        method: 'POST',
+        body: multipartFile(tooLarge, 'image/jpeg', 'large.jpg'),
+      });
+      const body = await response.json();
+      assert.equal(response.status, 413);
+      assert.equal(body.error.code, 'FILE_TOO_LARGE');
+      assert.equal(body.error.message, 'La imagen no puede superar 5 MB.');
     });
-    const body = await response.json();
-    assert.equal(response.status, 413);
-    assert.equal(body.error.code, 'FILE_TOO_LARGE');
-    assert.equal(body.error.message, 'La imagen no puede superar 5 MB.');
-  });
-  assert.deepEqual(await storedFileNames(), before);
+    await assert.rejects(fs.access(resolveUploadPath(`${uploadId}.jpg`)), { code: 'ENOENT' });
+  } finally {
+    crypto.randomUUID = originalRandomUUID;
+    await deleteUploadedFile(`${uploadId}.jpg`);
+  }
 });
 
 test('no acepta rutas físicas externas y limpia/sanitiza el nombre original', async () => {

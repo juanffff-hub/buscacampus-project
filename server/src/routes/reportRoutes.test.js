@@ -1,9 +1,16 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
+const fs = require('node:fs/promises');
 const jwt = require('jsonwebtoken');
 const app = require('../app');
 const pool = require('../config/database');
 const userRepository = require('../repositories/userRepository');
+const {
+  UPLOADS_DIR,
+  deleteUploadedFile,
+  resolveUploadPath,
+} = require('../middleware/reportUpload');
 
 async function withServer(run) {
   const server = app.listen(0);
@@ -38,6 +45,33 @@ const reportRow = {
   imagenPesoBytes: '1024',
   imagenFechaSubida: '2026-10-19T16:00:00.000Z',
 };
+
+function createReportForm(overrides = {}) {
+  const form = new FormData();
+  const fields = {
+    titulo: 'Termo verde',
+    descripcion: 'Encontrado en la biblioteca.',
+    categoriaId: '2',
+    ubicacionId: '3',
+    tipoReporte: 'Encontrado',
+    fechaHoraEvento: '2026-10-19T15:00:00.000Z',
+    ...overrides,
+  };
+  for (const [name, value] of Object.entries(fields)) form.append(name, value);
+  form.append(
+    'archivo',
+    new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x11])], {
+      type: 'image/png',
+    }),
+    'C:\\fakepath\\termo.png',
+  );
+  return form;
+}
+
+function reportSessionCookie(secret, id = '7') {
+  const token = jwt.sign({ sub: id }, secret, { expiresIn: '1m' });
+  return `buscacampus_session=${token}`;
+}
 
 test('GET /api/v1/categorias y /ubicaciones expone catálogos ordenados y activos', async () => {
   const original = pool.query;
@@ -220,5 +254,167 @@ test('GET /api/v1/reportes/:id devuelve detalle y 404 si no existe', async () =>
     });
   } finally {
     pool.query = original;
+  }
+});
+
+test('POST /api/v1/reportes guarda reporte y archivo en una transacción', async () => {
+  const originalConnect = pool.connect;
+  const originalFindById = userRepository.findById;
+  const originalSecret = process.env.JWT_SECRET;
+  const secret = 'report-create-test-secret-with-thirty-two-bytes';
+  const calls = [];
+  let reportValues;
+  let metadataValues;
+  let createdName;
+  let released = false;
+  pool.connect = async () => ({
+    query: async (sql, values) => {
+      calls.push(sql.trim().split(/\s+/)[0]);
+      if (sql.trim() === 'BEGIN' || sql.trim() === 'COMMIT') return { rows: [] };
+      if (sql.includes('INSERT INTO reportes_objetos')) {
+        reportValues = values;
+        return { rows: [{ id: '92' }] };
+      }
+      if (sql.includes('INSERT INTO archivos_metadatos')) {
+        metadataValues = values;
+        createdName = values[3];
+        return { rows: [] };
+      }
+      if (sql.includes('WHERE r.id = $1')) {
+        return {
+          rows: [{
+            ...reportRow,
+            id: '92',
+            titulo: reportValues[3],
+            descripcion: reportValues[4],
+            tipoReporte: reportValues[5],
+            fechaHoraEvento: reportValues[6],
+            imagenId: '102',
+            imagenNombreOriginal: metadataValues[2],
+            imagenNombreFisico: metadataValues[3],
+            imagenUrl: metadataValues[4],
+            imagenMimeType: metadataValues[5],
+            imagenExtension: metadataValues[6],
+            imagenPesoBytes: String(metadataValues[7]),
+          }],
+        };
+      }
+      if (sql.trim() === 'ROLLBACK') return { rows: [] };
+      throw new Error(`Unexpected transaction query: ${sql}`);
+    },
+    release: () => { released = true; },
+  });
+  userRepository.findById = async id => ({
+    id,
+    nombre_completo: 'Ana Pérez',
+    correo_electronico: 'ana@uao.edu.co',
+    rol: 'Usuario',
+    estado: 'Activo',
+    fecha_registro: '2026-10-19T12:00:00.000Z',
+  });
+  process.env.JWT_SECRET = secret;
+
+  try {
+    await withServer(async url => {
+      const response = await fetch(`${url}/api/v1/reportes`, {
+        method: 'POST',
+        headers: { Cookie: reportSessionCookie(secret) },
+        body: createReportForm(),
+      });
+      const body = await response.json();
+
+      assert.equal(response.status, 201);
+      assert.equal(body.success, true);
+      assert.equal(body.data.report.id, '92');
+      assert.equal(body.data.report.imagen.nombreOriginal, 'termo.png');
+      assert.equal(body.data.report.imagen.mimeType, 'image/png');
+      assert.deepEqual(calls, ['BEGIN', 'INSERT', 'INSERT', 'SELECT', 'COMMIT']);
+      assert.deepEqual(reportValues, [
+        '7', '2', '3', 'Termo verde', 'Encontrado en la biblioteca.', 'Encontrado',
+        '2026-10-19T15:00:00.000Z',
+      ]);
+      assert.equal(metadataValues[0], '92');
+      assert.equal(metadataValues[1], '7');
+      assert.equal(metadataValues[2], 'termo.png');
+      assert.match(metadataValues[3], /^[0-9a-f-]{36}\.png$/i);
+      assert.equal(metadataValues[4], `/uploads/${metadataValues[3]}`);
+      assert.equal(metadataValues[5], 'image/png');
+      assert.equal(metadataValues[6], '.png');
+      assert.equal(metadataValues[7], 9);
+      assert.equal(released, true);
+      assert.deepEqual(await fs.readFile(`${UPLOADS_DIR}/${createdName}`), Buffer.from([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x11,
+      ]));
+    });
+  } finally {
+    if (createdName) await deleteUploadedFile(createdName);
+    pool.connect = originalConnect;
+    userRepository.findById = originalFindById;
+    if (originalSecret === undefined) delete process.env.JWT_SECRET;
+    else process.env.JWT_SECRET = originalSecret;
+  }
+});
+
+test('POST /api/v1/reportes revierte la transacción y limpia el archivo ante fallo SQL', async () => {
+  const originalConnect = pool.connect;
+  const originalFindById = userRepository.findById;
+  const originalSecret = process.env.JWT_SECRET;
+  const secret = 'report-rollback-test-secret-with-thirty-two-bytes';
+  const originalRandomUUID = crypto.randomUUID;
+  const uploadId = 'f675e168-c0f8-40e9-a58f-5c473bfe9124';
+  await assert.rejects(fs.access(resolveUploadPath(`${uploadId}.png`)), { code: 'ENOENT' });
+  crypto.randomUUID = () => uploadId;
+  const calls = [];
+  pool.connect = async () => ({
+    query: async sql => {
+      const statement = sql.trim();
+      calls.push(statement);
+      if (statement === 'BEGIN' || statement.startsWith('INSERT INTO reportes_objetos')) {
+        return { rows: [{ id: '93' }] };
+      }
+      if (statement.startsWith('INSERT INTO archivos_metadatos')) {
+        const error = new Error('private postgres host and statement');
+        error.code = 'XX000';
+        throw error;
+      }
+      if (statement === 'ROLLBACK') return { rows: [] };
+      throw new Error(`Unexpected transaction query: ${statement}`);
+    },
+    release() {},
+  });
+  userRepository.findById = async id => ({
+    id,
+    nombre_completo: 'Ana Pérez',
+    correo_electronico: 'ana@uao.edu.co',
+    rol: 'Usuario',
+    estado: 'Activo',
+    fecha_registro: '2026-10-19T12:00:00.000Z',
+  });
+  process.env.JWT_SECRET = secret;
+
+  try {
+    await withServer(async url => {
+      const response = await fetch(`${url}/api/v1/reportes`, {
+        method: 'POST',
+        headers: { Cookie: reportSessionCookie(secret) },
+        body: createReportForm(),
+      });
+      const body = await response.json();
+
+      assert.equal(response.status, 500);
+      assert.equal(body.error.code, 'INTERNAL_SERVER_ERROR');
+      assert.equal(body.error.message, 'Ocurrió un error inesperado.');
+      assert.doesNotMatch(JSON.stringify(body), /postgres host|statement|uploads|[A-Z]:\\/i);
+      assert.equal(calls.at(-1), 'ROLLBACK');
+      assert.ok(calls.includes('BEGIN'));
+    });
+    await assert.rejects(fs.access(resolveUploadPath(`${uploadId}.png`)), { code: 'ENOENT' });
+  } finally {
+    crypto.randomUUID = originalRandomUUID;
+    await deleteUploadedFile(`${uploadId}.png`);
+    pool.connect = originalConnect;
+    userRepository.findById = originalFindById;
+    if (originalSecret === undefined) delete process.env.JWT_SECRET;
+    else process.env.JWT_SECRET = originalSecret;
   }
 });

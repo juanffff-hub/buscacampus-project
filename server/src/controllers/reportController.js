@@ -1,7 +1,12 @@
 const ApiError = require('../errors/ApiError');
 const reportService = require('../services/reportService');
-const { reportIdSchema, listReportsSchema } = require('../schemas/reportSchemas');
+const {
+  reportIdSchema,
+  listReportsSchema,
+  createReportSchema,
+} = require('../schemas/reportSchemas');
 const { sendSuccess } = require('../utils/responses');
+const { deleteUploadedFile } = require('../middleware/reportUpload');
 
 async function list(req, res) {
   const filters = listReportsSchema.parse(req.query);
@@ -16,4 +21,25 @@ async function getById(req, res) {
   return sendSuccess(res, { report });
 }
 
-module.exports = { list, getById };
+async function create(req, res) {
+  try {
+    const input = createReportSchema.parse(req.body);
+    if (!req.file) {
+      throw new ApiError(400, 'IMAGE_REQUIRED', 'Debes adjuntar una imagen al reporte.');
+    }
+
+    const report = await reportService.createReport(input, req.file, req.user.id);
+    return sendSuccess(res, { report }, 201);
+  } catch (error) {
+    if (req.file) {
+      try {
+        await deleteUploadedFile(req.file.filename);
+      } catch {
+        // Preserve validation/transaction errors without returning filesystem details.
+      }
+    }
+    throw error;
+  }
+}
+
+module.exports = { list, getById, create };
