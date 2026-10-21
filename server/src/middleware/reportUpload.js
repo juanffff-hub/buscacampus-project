@@ -28,12 +28,71 @@ function resolveUploadPath(filename) {
   return resolved;
 }
 
+function resolveStagedPath(filename) {
+  if (typeof filename !== 'string' || !/^\.deleting-[0-9a-f-]{36}$/i.test(filename)) {
+    throw new TypeError('Invalid staged upload name.');
+  }
+  const resolved = path.resolve(UPLOADS_DIR, filename);
+  if (path.dirname(resolved) !== UPLOADS_DIR) {
+    throw new TypeError('Invalid staged upload path.');
+  }
+  return resolved;
+}
+
 async function deleteUploadedFile(filename) {
   const filePath = resolveUploadPath(filename);
   try {
     await fs.unlink(filePath);
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;
+  }
+}
+
+async function stageUploadedFiles(filenames) {
+  const staged = [];
+  try {
+    for (const filename of filenames) {
+      const stagedName = `.deleting-${crypto.randomUUID()}`;
+      try {
+        await fs.rename(resolveUploadPath(filename), resolveStagedPath(stagedName));
+        staged.push({ filename, stagedName });
+      } catch (error) {
+        if (error.code === 'ENOENT') continue;
+        throw error;
+      }
+    }
+    return staged;
+  } catch (error) {
+    try {
+      await restoreStagedFiles(staged);
+    } catch {
+      // Preserve the original staging error; paths stay inside uploads/.
+    }
+    throw error;
+  }
+}
+
+async function restoreStagedFiles(staged) {
+  for (const file of staged) {
+    try {
+      await fs.rename(resolveStagedPath(file.stagedName), resolveUploadPath(file.filename));
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
+}
+
+async function purgeStagedFiles(staged) {
+  const failures = [];
+  for (const file of staged) {
+    try {
+      await fs.unlink(resolveStagedPath(file.stagedName));
+    } catch (error) {
+      if (error.code !== 'ENOENT') failures.push(error);
+    }
+  }
+  if (failures.length) {
+    console.error('Could not finish removing a report image after the database commit.');
   }
 }
 
@@ -148,6 +207,9 @@ module.exports = {
   MAX_FILE_SIZE,
   MIME_TO_EXTENSION,
   deleteUploadedFile,
+  stageUploadedFiles,
+  restoreStagedFiles,
+  purgeStagedFiles,
   resolveUploadPath,
   sanitizeOriginalName,
   uploadReportImage,

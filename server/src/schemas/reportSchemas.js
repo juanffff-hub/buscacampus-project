@@ -22,4 +22,13 @@ const createReportSchema = z.object({
   fechaHoraEvento: z.coerce.date().transform(value => value.toISOString()),
 }).strict();
 
-module.exports = { reportIdSchema, listReportsSchema, createReportSchema };
+const updateReportSchema = createReportSchema.extend({
+  estado: z.enum(['Publicado', 'En reclamación', 'Devuelto']).optional(),
+});
+
+module.exports = {
+  reportIdSchema,
+  listReportsSchema,
+  createReportSchema,
+  updateReportSchema,
+};

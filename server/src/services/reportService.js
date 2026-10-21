@@ -59,13 +59,7 @@ async function getReport(id) {
 }
 
 async function createReport(input, uploadedFile, userId) {
-  const file = {
-    originalName: sanitizeOriginalName(uploadedFile.originalname),
-    filename: uploadedFile.filename,
-    mimeType: uploadedFile.mimetype,
-    extension: path.extname(uploadedFile.filename),
-    size: uploadedFile.size,
-  };
+  const file = toFileMetadata(uploadedFile);
 
   try {
     const row = await reportRepository.createReport(input, file, userId);
@@ -84,4 +78,57 @@ async function createReport(input, uploadedFile, userId) {
   }
 }
 
-module.exports = { listReports, getReport, createReport, toPublicReport };
+function toFileMetadata(uploadedFile) {
+  return {
+    originalName: sanitizeOriginalName(uploadedFile.originalname),
+    filename: uploadedFile.filename,
+    mimeType: uploadedFile.mimetype,
+    extension: path.extname(uploadedFile.filename),
+    size: uploadedFile.size,
+  };
+}
+
+async function updateReport(id, input, uploadedFile, actor) {
+  let row;
+  try {
+    row = await reportRepository.updateReport(
+      id,
+      input,
+      uploadedFile ? toFileMetadata(uploadedFile) : null,
+      actor,
+    );
+  } catch (error) {
+    if (uploadedFile) {
+      try {
+        await deleteUploadedFile(uploadedFile.filename);
+      } catch {
+        // Preserve the database/API error and never return an absolute path.
+      }
+    }
+    if (error.code === '23503') {
+      throw new ApiError(400, 'INVALID_REFERENCE', 'La categoría o ubicación seleccionada no existe.');
+    }
+    throw error;
+  }
+  return toPublicReport(row);
+}
+
+async function deleteReport(id, actor) {
+  try {
+    await reportRepository.deleteReport(id, actor);
+  } catch (error) {
+    if (error.code === '23503') {
+      throw new ApiError(409, 'REPORT_HAS_DEPENDENCIES', 'El reporte tiene registros relacionados y no se puede eliminar.');
+    }
+    throw error;
+  }
+}
+
+module.exports = {
+  listReports,
+  getReport,
+  createReport,
+  updateReport,
+  deleteReport,
+  toPublicReport,
+};

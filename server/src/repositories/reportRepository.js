@@ -1,4 +1,10 @@
 const pool = require('../config/database');
+const ApiError = require('../errors/ApiError');
+const {
+  stageUploadedFiles,
+  restoreStagedFiles,
+  purgeStagedFiles,
+} = require('../middleware/reportUpload');
 
 const REPORT_SELECT = `
   SELECT
@@ -176,4 +182,162 @@ async function createReport(input, file, userId) {
   }
 }
 
-module.exports = { listReports, findReportById, createReport };
+async function lockReportForManagement(client, id, actor) {
+  const result = await client.query(
+    `SELECT id::text AS id, usuario_creador_id::text AS "ownerId"
+     FROM reportes_objetos
+     WHERE id = $1
+     FOR UPDATE`,
+    [id],
+  );
+  const report = result.rows[0];
+  if (!report) {
+    throw new ApiError(404, 'REPORT_NOT_FOUND', 'El reporte solicitado no existe.');
+  }
+  if (report.ownerId !== String(actor.id) && actor.rol !== 'Administrador') {
+    throw new ApiError(403, 'FORBIDDEN', 'No tienes permiso para modificar este reporte.');
+  }
+  return report;
+}
+
+async function updateReport(id, input, file, actor) {
+  const client = await pool.connect();
+  let transactionOpen = false;
+  let stagedFiles = [];
+  try {
+    await client.query('BEGIN');
+    transactionOpen = true;
+    await lockReportForManagement(client, id, actor);
+
+    await client.query(
+      `UPDATE reportes_objetos
+       SET titulo = $1,
+           descripcion = $2,
+           categoria_id = $3,
+           ubicacion_id = $4,
+           tipo_reporte = $5,
+           fecha_hora_evento = $6,
+           estado = COALESCE($7, estado)
+       WHERE id = $8`,
+      [
+        input.titulo,
+        input.descripcion,
+        input.categoriaId,
+        input.ubicacionId,
+        input.tipoReporte,
+        input.fechaHoraEvento,
+        input.estado || null,
+        id,
+      ],
+    );
+
+    if (file) {
+      const oldFiles = await client.query(
+        `SELECT nombre_fisico AS filename
+         FROM archivos_metadatos
+         WHERE reporte_id = $1
+         FOR UPDATE`,
+        [id],
+      );
+      stagedFiles = await stageUploadedFiles(oldFiles.rows.map(row => row.filename));
+      await client.query('DELETE FROM archivos_metadatos WHERE reporte_id = $1', [id]);
+      await client.query(
+        `INSERT INTO archivos_metadatos
+           (reporte_id, usuario_autor_id, nombre_original, nombre_fisico,
+            ruta_url, mime_type, extension, peso_bytes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          id,
+          actor.id,
+          file.originalName,
+          file.filename,
+          `/uploads/${file.filename}`,
+          file.mimeType,
+          file.extension,
+          file.size,
+        ],
+      );
+    }
+
+    const updated = await findReportById(id, client);
+    if (!updated) {
+      throw new ApiError(404, 'REPORT_NOT_FOUND', 'El reporte solicitado no existe.');
+    }
+    await client.query('COMMIT');
+    transactionOpen = false;
+    await purgeStagedFiles(stagedFiles);
+    return updated;
+  } catch (error) {
+    if (transactionOpen) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // Preserve the original database or authorization error.
+      }
+    }
+    try {
+      await restoreStagedFiles(stagedFiles);
+    } catch {
+      // Preserve the API error; no user-supplied path is used for restoration.
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function deleteReport(id, actor) {
+  const client = await pool.connect();
+  let transactionOpen = false;
+  let stagedFiles = [];
+  try {
+    await client.query('BEGIN');
+    transactionOpen = true;
+    await lockReportForManagement(client, id, actor);
+
+    const oldFiles = await client.query(
+      `SELECT nombre_fisico AS filename
+       FROM archivos_metadatos
+       WHERE reporte_id = $1
+       FOR UPDATE`,
+      [id],
+    );
+    stagedFiles = await stageUploadedFiles(oldFiles.rows.map(row => row.filename));
+
+    const result = await client.query(
+      'DELETE FROM reportes_objetos WHERE id = $1 RETURNING id',
+      [id],
+    );
+    if (!result.rows.length) {
+      throw new ApiError(404, 'REPORT_NOT_FOUND', 'El reporte solicitado no existe.');
+    }
+
+    await client.query('COMMIT');
+    transactionOpen = false;
+    await purgeStagedFiles(stagedFiles);
+  } catch (error) {
+    if (transactionOpen) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // Preserve the original database or authorization error.
+      }
+    }
+    try {
+      await restoreStagedFiles(stagedFiles);
+    } catch {
+      // Preserve the API error; no user-supplied path is used for restoration.
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = {
+  listReports,
+  findReportById,
+  createReport,
+  updateReport,
+  deleteReport,
+};
