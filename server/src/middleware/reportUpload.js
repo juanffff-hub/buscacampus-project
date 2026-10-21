@@ -132,8 +132,8 @@ const multerUpload = multer({
   limits: {
     fileSize: MAX_FILE_SIZE,
     files: 1,
-    fields: 6,
-    parts: 7,
+    fields: 7,
+    parts: 8,
     fieldSize: 20 * 1024,
     fieldNameSize: 100,
   },
