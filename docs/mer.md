@@ -50,6 +50,7 @@ erDiagram
       string nombre_original
       string nombre_fisico UK
       string ruta_url
+      string mime_type
       string extension
       bigint peso_bytes
       datetime fecha_subida

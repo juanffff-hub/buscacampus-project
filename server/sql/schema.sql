@@ -46,10 +46,14 @@ CREATE TABLE IF NOT EXISTS archivos_metadatos (
   nombre_original VARCHAR(255) NOT NULL,
   nombre_fisico VARCHAR(255) NOT NULL UNIQUE,
   ruta_url TEXT NOT NULL,
+  mime_type VARCHAR(100) NOT NULL DEFAULT 'application/octet-stream',
   extension VARCHAR(20) NOT NULL,
   peso_bytes BIGINT NOT NULL CHECK (peso_bytes > 0),
   fecha_subida TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE archivos_metadatos
+  ADD COLUMN IF NOT EXISTS mime_type VARCHAR(100) NOT NULL DEFAULT 'application/octet-stream';
 
 CREATE TABLE IF NOT EXISTS reclamaciones (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -65,4 +69,5 @@ CREATE TABLE IF NOT EXISTS reclamaciones (
 CREATE INDEX IF NOT EXISTS idx_reportes_fecha ON reportes_objetos (fecha_creacion DESC);
 CREATE INDEX IF NOT EXISTS idx_reportes_filtros ON reportes_objetos (categoria_id, ubicacion_id, tipo_reporte);
 CREATE INDEX IF NOT EXISTS idx_archivos_reporte ON archivos_metadatos (reporte_id);
+CREATE INDEX IF NOT EXISTS idx_archivos_autor ON archivos_metadatos (usuario_autor_id);
 CREATE INDEX IF NOT EXISTS idx_reclamaciones_reporte ON reclamaciones (reporte_id);
