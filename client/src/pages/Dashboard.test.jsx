@@ -3,14 +3,23 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import Dashboard from "./Dashboard.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
-import { getApiAssetUrl, getReports } from "../services/api.js";
+import {
+  createReport,
+  getApiAssetUrl,
+  getCategories,
+  getLocations,
+  getReports,
+} from "../services/api.js";
 
 vi.mock("../context/AuthContext.jsx", () => ({
   useAuth: vi.fn(),
 }));
 
 vi.mock("../services/api.js", () => ({
+  createReport: vi.fn(),
+  getCategories: vi.fn(),
   getApiAssetUrl: vi.fn((path) => `http://localhost:4000${path}`),
+  getLocations: vi.fn(),
   getReports: vi.fn(),
 }));
 
@@ -38,6 +47,8 @@ describe("Dashboard de reportes propios", () => {
   beforeEach(() => {
     useAuth.mockReturnValue({ user: { nombreCompleto: "Ana Pérez" } });
     getReports.mockResolvedValue({ items: [ownReport] });
+    getCategories.mockResolvedValue({ items: [{ id: "4", nombre: "Llaves" }] });
+    getLocations.mockResolvedValue({ items: [{ id: "6", nombre: "Bloque C" }] });
   });
 
   afterEach(() => vi.clearAllMocks());
@@ -79,5 +90,33 @@ describe("Dashboard de reportes propios", () => {
       "/#explorar",
     );
     expect(screen.getByText("0")).toBeInTheDocument();
+  });
+
+  it("opens the report form and adds a created report to the dashboard", async () => {
+    const newReport = {
+      ...ownReport,
+      id: "93",
+      titulo: "Billetera verde",
+      descripcion: "Encontrada junto a la biblioteca.",
+    };
+    createReport.mockResolvedValue({ report: newReport });
+    renderDashboard();
+    await screen.findByRole("heading", { name: "Llaves del laboratorio" });
+    fireEvent.click(screen.getByRole("button", { name: "Publicar reporte" }));
+    await screen.findByRole("heading", { name: "Publicar un reporte" });
+
+    fireEvent.change(screen.getByLabelText("Título"), { target: { value: newReport.titulo } });
+    fireEvent.change(screen.getByLabelText("Descripción"), { target: { value: newReport.descripcion } });
+    fireEvent.change(screen.getByLabelText("Categoría"), { target: { value: "4" } });
+    fireEvent.change(screen.getByLabelText("Ubicación"), { target: { value: "6" } });
+    fireEvent.change(screen.getByLabelText("Fecha y hora del evento"), { target: { value: "2026-10-21T06:00" } });
+    fireEvent.change(screen.getByLabelText(/Imagen/), {
+      target: { files: [new File(["image"], "wallet.png", { type: "image/png" })] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Publicar reporte", exact: true }));
+
+    expect(await screen.findByRole("heading", { name: "Billetera verde" })).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(createReport).toHaveBeenCalledTimes(1);
   });
 });

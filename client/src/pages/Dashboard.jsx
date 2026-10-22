@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import ObjectCard from "../components/ObjectCard.jsx";
+import ReportForm from "../components/ReportForm.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { getApiAssetUrl, getReports } from "../services/api.js";
 
@@ -28,6 +29,18 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [retry, setRetry] = useState(0);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+
+  function handleCreated(report) {
+    if (report) {
+      setReports((current) => [
+        toCardItem(report),
+        ...current.filter((item) => String(item.id) !== String(report.id)),
+      ]);
+    } else {
+      setRetry((value) => value + 1);
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -61,11 +74,28 @@ export default function Dashboard() {
                 : "Aquí puedes consultar tus publicaciones."}
             </p>
           </div>
-          <div className="dashboard-summary" aria-label="Resumen de publicaciones">
-            <strong>{reports.length}</strong>
-            <span>{reports.length === 1 ? "reporte propio" : "reportes propios"}</span>
+          <div className="dashboard-heading-actions">
+            <button
+              className="button button-primary"
+              type="button"
+              onClick={() => setShowCreateForm((visible) => !visible)}
+              aria-expanded={showCreateForm}
+              aria-controls="create-report-panel"
+            >
+              {showCreateForm ? "Ocultar formulario" : "Publicar reporte"}
+            </button>
+            <div className="dashboard-summary" aria-label="Resumen de publicaciones">
+              <strong>{reports.length}</strong>
+              <span>{reports.length === 1 ? "reporte propio" : "reportes propios"}</span>
+            </div>
           </div>
         </div>
+
+        {showCreateForm && (
+          <div id="create-report-panel" className="dashboard-create-panel">
+            <ReportForm onCreated={handleCreated} onCancel={() => setShowCreateForm(false)} />
+          </div>
+        )}
 
         {isLoading ? (
           <div className="dashboard-state" role="status">
