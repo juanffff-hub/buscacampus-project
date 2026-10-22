@@ -1,0 +1,744 @@
+openapi: 3.1.0
+info:
+  title: BuscaCampus API
+  version: 2.0.0
+  description: API REST del Avance 2 para autenticación, catálogos y reportes con archivos locales.
+servers:
+  - url: http://localhost:4000/api/v1
+    description: Desarrollo local
+tags:
+  - name: Salud
+  - name: Autenticación
+  - name: Catálogos
+  - name: Reportes
+paths:
+  /health:
+    get:
+      tags: [Salud]
+      summary: Comprueba la API y PostgreSQL
+      responses:
+        "200":
+          description: API y base de datos disponibles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /auth/registro:
+    post:
+      tags: [Autenticación]
+      summary: Registra un usuario institucional
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegistrationRequest"
+      responses:
+        "201":
+          description: Usuario creado; nunca incluye el hash de contraseña
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /auth/login:
+    post:
+      tags: [Autenticación]
+      summary: Inicia sesión y establece la cookie HttpOnly
+      description: La sesión se envía en la cookie `buscacampus_session`; el JWT no se devuelve en JSON.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Credenciales válidas; establece la cookie de sesión
+          headers:
+            Set-Cookie:
+              description: Cookie HttpOnly, SameSite=Lax y Secure según configuración.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /auth/me:
+    get:
+      tags: [Autenticación]
+      summary: Restaura la sesión autenticada
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Usuario de la sesión
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /auth/logout:
+    post:
+      tags: [Autenticación]
+      summary: Elimina la cookie de sesión
+      responses:
+        "204":
+          description: Cookie borrada; respuesta sin cuerpo
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /categorias:
+    get:
+      tags: [Catálogos]
+      summary: Lista categorías
+      responses:
+        "200":
+          description: Categorías disponibles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoriesResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /ubicaciones:
+    get:
+      tags: [Catálogos]
+      summary: Lista ubicaciones activas
+      responses:
+        "200":
+          description: Ubicaciones activas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationsResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /reportes:
+    get:
+      tags: [Reportes]
+      summary: Busca, filtra y pagina reportes
+      description: "`mios=true` requiere una sesión válida; sin ese filtro la consulta es pública."
+      parameters:
+        - name: q
+          in: query
+          description: Búsqueda parcial en título, descripción, categoría, ubicación y autor.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - name: categoriaId
+          in: query
+          schema:
+            type: string
+            pattern: "^[1-9][0-9]*$"
+        - name: ubicacionId
+          in: query
+          schema:
+            type: string
+            pattern: "^[1-9][0-9]*$"
+        - name: tipoReporte
+          in: query
+          schema:
+            type: string
+            enum: [Perdido, Encontrado]
+        - name: estado
+          in: query
+          schema:
+            type: string
+            enum: [Publicado, "En reclamación", Devuelto]
+        - name: mios
+          in: query
+          description: Usa `true` para listar solo reportes del usuario autenticado.
+          schema:
+            type: string
+            enum: ["true", "false"]
+            default: "false"
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Página de reportes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportsResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [Reportes]
+      summary: Crea un reporte y asocia una imagen
+      description: Requiere sesión. El archivo se almacena en disco y sus metadatos se guardan en la misma transacción que el reporte.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ReportCreateRequest"
+            encoding:
+              archivo:
+                contentType: image/jpeg, image/png, image/webp
+      responses:
+        "201":
+          description: Reporte creado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /reportes/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: "^[1-9][0-9]*$"
+    get:
+      tags: [Reportes]
+      summary: Consulta un reporte por identificador
+      responses:
+        "200":
+          description: Reporte encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      tags: [Reportes]
+      summary: Actualiza un reporte propio
+      description: Requiere sesión. Solo el autor o un administrador puede actualizarlo. La imagen es opcional; sin reemplazo se conserva la actual.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ReportUpdateRequest"
+            encoding:
+              archivo:
+                contentType: image/jpeg, image/png, image/webp
+      responses:
+        "200":
+          description: Reporte actualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags: [Reportes]
+      summary: Elimina un reporte propio y su imagen
+      description: Requiere sesión. Solo el autor o un administrador puede eliminarlo.
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: Reporte y archivo eliminados; respuesta sin cuerpo
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: buscacampus_session
+      description: Cookie HttpOnly creada por `POST /auth/login`.
+  schemas:
+    Error:
+      type: object
+      required: [code, message, details]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    ErrorResponse:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          const: false
+        error:
+          $ref: "#/components/schemas/Error"
+    User:
+      type: object
+      required:
+        [id, nombreCompleto, correoElectronico, rol, estado, fechaRegistro]
+      properties:
+        id:
+          type: string
+        nombreCompleto:
+          type: string
+        correoElectronico:
+          type: string
+          format: email
+        rol:
+          type: string
+          enum: [Usuario, Administrador]
+        estado:
+          type: string
+          enum: [Activo, Inactivo]
+        fechaRegistro:
+          type: string
+          format: date-time
+    UserResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          const: true
+        data:
+          type: object
+          required: [user]
+          properties:
+            user:
+              $ref: "#/components/schemas/User"
+    RegistrationRequest:
+      type: object
+      additionalProperties: false
+      required: [nombreCompleto, correoElectronico, contrasena]
+      properties:
+        nombreCompleto:
+          type: string
+          minLength: 3
+          maxLength: 160
+        correoElectronico:
+          type: string
+          format: email
+          description: Debe ser institucional `@uao.edu.co`; la API normaliza mayúsculas y minúsculas.
+        contrasena:
+          type: string
+          minLength: 8
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [correoElectronico, contrasena]
+      properties:
+        correoElectronico:
+          type: string
+          format: email
+          description: Debe ser institucional `@uao.edu.co`; la API normaliza mayúsculas y minúsculas.
+        contrasena:
+          type: string
+          minLength: 8
+    HealthResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          const: true
+        data:
+          type: object
+          required: [status, message, timestamp, database]
+          properties:
+            status:
+              const: OK
+            message:
+              type: string
+            timestamp:
+              type: string
+              format: date-time
+            database:
+              type: object
+              required: [connected, db_time]
+              properties:
+                connected:
+                  const: true
+                db_time:
+                  type: string
+                  format: date-time
+    Category:
+      type: object
+      required: [id, nombre, descripcion]
+      properties:
+        id:
+          type: string
+        nombre:
+          type: string
+        descripcion:
+          type: string
+    Location:
+      type: object
+      required: [id, nombre]
+      properties:
+        id:
+          type: string
+        nombre:
+          type: string
+    CategoriesResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          const: true
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Category"
+    LocationsResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          const: true
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Location"
+    ImageMetadata:
+      type: object
+      required:
+        [
+          id,
+          nombreOriginal,
+          nombreFisico,
+          url,
+          mimeType,
+          extension,
+          pesoBytes,
+          fechaSubida,
+        ]
+      properties:
+        id:
+          type: string
+        nombreOriginal:
+          type: string
+        nombreFisico:
+          type: string
+        url:
+          type: string
+          format: uri-reference
+        mimeType:
+          type: string
+          enum: [image/jpeg, image/png, image/webp]
+        extension:
+          type: string
+        pesoBytes:
+          type: integer
+          minimum: 1
+        fechaSubida:
+          type: string
+          format: date-time
+    Report:
+      type: object
+      required:
+        [
+          id,
+          titulo,
+          descripcion,
+          tipoReporte,
+          estado,
+          fechaHoraEvento,
+          fechaCreacion,
+          autor,
+          categoria,
+          ubicacion,
+          imagen,
+        ]
+      properties:
+        id:
+          type: string
+        titulo:
+          type: string
+          minLength: 3
+          maxLength: 180
+        descripcion:
+          type: string
+          maxLength: 5000
+        tipoReporte:
+          type: string
+          enum: [Perdido, Encontrado]
+        estado:
+          type: string
+          enum: [Publicado, "En reclamación", Devuelto]
+        fechaHoraEvento:
+          type: string
+          format: date-time
+        fechaCreacion:
+          type: string
+          format: date-time
+        autor:
+          type: object
+          required: [id, nombreCompleto]
+          properties:
+            id:
+              type: string
+            nombreCompleto:
+              type: string
+        categoria:
+          type: object
+          required: [id, nombre]
+          properties:
+            id:
+              type: string
+            nombre:
+              type: string
+        ubicacion:
+          type: object
+          required: [id, nombre]
+          properties:
+            id:
+              type: string
+            nombre:
+              type: string
+        imagen:
+          oneOf:
+            - $ref: "#/components/schemas/ImageMetadata"
+            - type: "null"
+    Pagination:
+      type: object
+      required: [page, limit, total, totalPages]
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+    ReportsResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          const: true
+        data:
+          type: object
+          required: [items, pagination]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Report"
+            pagination:
+              $ref: "#/components/schemas/Pagination"
+    ReportResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          const: true
+        data:
+          type: object
+          required: [report]
+          properties:
+            report:
+              $ref: "#/components/schemas/Report"
+    ReportCreateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          titulo,
+          descripcion,
+          categoriaId,
+          ubicacionId,
+          tipoReporte,
+          fechaHoraEvento,
+          archivo,
+        ]
+      properties:
+        titulo:
+          type: string
+          minLength: 3
+          maxLength: 180
+        descripcion:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        categoriaId:
+          type: string
+          pattern: "^[1-9][0-9]*$"
+        ubicacionId:
+          type: string
+          pattern: "^[1-9][0-9]*$"
+        tipoReporte:
+          type: string
+          enum: [Perdido, Encontrado]
+        fechaHoraEvento:
+          type: string
+          format: date-time
+        archivo:
+          type: string
+          format: binary
+          description: Imagen JPEG, PNG o WebP de máximo 5 MB.
+    ReportUpdateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          titulo,
+          descripcion,
+          categoriaId,
+          ubicacionId,
+          tipoReporte,
+          fechaHoraEvento,
+        ]
+      properties:
+        titulo:
+          type: string
+          minLength: 3
+          maxLength: 180
+        descripcion:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        categoriaId:
+          type: string
+          pattern: "^[1-9][0-9]*$"
+        ubicacionId:
+          type: string
+          pattern: "^[1-9][0-9]*$"
+        tipoReporte:
+          type: string
+          enum: [Perdido, Encontrado]
+        fechaHoraEvento:
+          type: string
+          format: date-time
+        estado:
+          type: string
+          enum: [Publicado, "En reclamación", Devuelto]
+        archivo:
+          type: string
+          format: binary
+          description: Imagen JPEG, PNG o WebP de máximo 5 MB; opcional al editar.
+  responses:
+    ValidationError:
+      description: Datos inválidos o archivo ausente/tipo no admitido
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Se requiere sesión o las credenciales son inválidas
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: El usuario autenticado no puede modificar este reporte
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: El reporte no existe
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: Correo duplicado o dependencias impiden eliminar el reporte
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    PayloadTooLarge:
+      description: El archivo supera 5 MB
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ServiceUnavailable:
+      description: PostgreSQL no está disponible
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalError:
+      description: Error inesperado sin detalles internos
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
