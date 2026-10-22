@@ -1,71 +1,44 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import ItemArt from "../components/ItemArt.jsx";
 import ObjectCard from "../components/ObjectCard.jsx";
+import { getApiAssetUrl, getCategories, getLocations, getReports } from "../services/api.js";
 
-const items = [
-  {
-    id: 1,
-    title: "Termo verde de acero",
-    category: "Otros",
-    type: "Encontrado",
-    location: "Biblioteca",
-    date: "Hoy",
-    kind: "bottle",
-    description: "Encontrado junto a las mesas de estudio del primer piso.",
-  },
-  {
-    id: 2,
-    title: "Llaves con llavero amarillo",
-    category: "Llaves",
-    type: "Perdido",
-    location: "Plazoleta Central",
-    date: "Ayer",
-    kind: "keys",
-    description: "Juego de tres llaves en un llavero de color amarillo.",
-  },
-  {
-    id: 3,
-    title: "Billetera azul oscura",
-    category: "Documentos",
-    type: "Encontrado",
-    location: "Cafetería Central",
-    date: "Hace 2 días",
-    kind: "wallet",
-    description: "Billetera encontrada cerca de la entrada principal.",
-  },
-  {
-    id: 4,
-    title: "Audífonos inalámbricos",
-    category: "Electrónicos",
-    type: "Perdido",
-    location: "Bloque C",
-    date: "Hace 3 días",
-    kind: "headphones",
-    description: "Audífonos de diadema, color crema, sin estuche.",
-  },
-];
-const categories = [
-  "Todas",
-  "Electrónicos",
-  "Documentos",
-  "Llaves",
-  "Ropa",
-  "Otros",
-];
-const locations = [
-  "Todas las ubicaciones",
-  "Biblioteca",
-  "Cafetería Central",
-  "Bloque C",
-  "Plazoleta Central",
-];
+function formatReportDate(value) {
+  if (!value) return "Fecha no disponible";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Fecha no disponible";
+  return new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short" }).format(date);
+}
+
+function toCardItem(report) {
+  return {
+    id: report.id,
+    title: report.titulo,
+    category: report.categoria?.nombre || "Sin categoría",
+    type: report.tipoReporte,
+    status: report.estado,
+    location: report.ubicacion?.nombre || "Ubicación no disponible",
+    date: formatReportDate(report.fechaCreacion || report.fechaHoraEvento),
+    description: report.descripcion,
+    imageUrl: getApiAssetUrl(report.imagen?.url),
+  };
+}
 
 export default function LandingPage() {
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("Todas");
-  const [location, setLocation] = useState("Todas las ubicaciones");
+  const [categoryId, setCategoryId] = useState("");
+  const [locationId, setLocationId] = useState("");
+  const [categories, setCategories] = useState([]);
+  const [locations, setLocations] = useState([]);
+  const [reports, setReports] = useState([]);
+  const [catalogError, setCatalogError] = useState(null);
+  const [reportError, setReportError] = useState(null);
+  const [catalogsLoading, setCatalogsLoading] = useState(true);
+  const [reportsLoading, setReportsLoading] = useState(true);
+  const [catalogRetry, setCatalogRetry] = useState(0);
+  const [reportRetry, setReportRetry] = useState(0);
   const route = useLocation();
 
   useEffect(() => {
@@ -73,21 +46,51 @@ export default function LandingPage() {
       document.getElementById("explorar")?.scrollIntoView();
   }, [route.hash]);
 
-  const filtered = useMemo(
-    () =>
-      items.filter((item) => {
-        const term = search.trim().toLocaleLowerCase("es");
-        return (
-          (!term ||
-            `${item.title} ${item.description} ${item.location}`
-              .toLocaleLowerCase("es")
-              .includes(term)) &&
-          (category === "Todas" || item.category === category) &&
-          (location === "Todas las ubicaciones" || item.location === location)
-        );
-      }),
-    [search, category, location],
-  );
+  useEffect(() => {
+    let active = true;
+    setCatalogsLoading(true);
+    setCatalogError(null);
+    Promise.all([getCategories(), getLocations()])
+      .then(([categoryResult, locationResult]) => {
+        if (!active) return;
+        setCategories(categoryResult.items || []);
+        setLocations(locationResult.items || []);
+      })
+      .catch((error) => {
+        if (active) setCatalogError(error);
+      })
+      .finally(() => {
+        if (active) setCatalogsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [catalogRetry]);
+
+  useEffect(() => {
+    let active = true;
+    setReportsLoading(true);
+    setReportError(null);
+    getReports({
+      q: search,
+      categoriaId: categoryId,
+      ubicacionId: locationId,
+      page: 1,
+      limit: 12,
+    })
+      .then((result) => {
+        if (active) setReports((result.items || []).map(toCardItem));
+      })
+      .catch((error) => {
+        if (active) setReportError(error);
+      })
+      .finally(() => {
+        if (active) setReportsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [search, categoryId, locationId, reportRetry]);
 
   return (
     <>
@@ -188,8 +191,16 @@ export default function LandingPage() {
               </h2>
               <p>Descubre lo que la comunidad ha perdido y encontrado.</p>
             </div>
-            <span className="demo-badge">Datos de muestra · Avance 1</span>
+            <span className="demo-badge">Reportes de la comunidad UAO</span>
           </div>
+          {catalogError && (
+            <div className="inline-error" role="alert">
+              <span>No pudimos cargar las categorías y ubicaciones.</span>
+              <button type="button" onClick={() => setCatalogRetry((value) => value + 1)}>
+                Reintentar catálogos
+              </button>
+            </div>
+          )}
           <div className="filter-panel">
             <label className="search-field">
               <span className="sr-only">Buscar objetos</span>
@@ -198,35 +209,63 @@ export default function LandingPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="¿Qué estás buscando?"
+                aria-label="Buscar reportes"
               />
             </label>
             <label className="select-field">
               <span className="sr-only">Filtrar por ubicación</span>
               <select
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
+                value={locationId}
+                onChange={(e) => setLocationId(e.target.value)}
+                disabled={catalogsLoading || Boolean(catalogError)}
+                aria-label="Filtrar por ubicación"
               >
-                {locations.map((loc) => (
-                  <option key={loc}>{loc}</option>
+                <option value="">Todas las ubicaciones</option>
+                {locations.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.nombre}
+                  </option>
                 ))}
               </select>
             </label>
           </div>
           <div className="category-list" aria-label="Filtrar por categoría">
-            {categories.map((cat) => (
+            <button
+              type="button"
+              className={`category-chip ${categoryId === "" ? "chip-active" : ""}`}
+              aria-pressed={categoryId === ""}
+              onClick={() => setCategoryId("")}
+            >
+              Todas
+            </button>
+            {categories.map((category) => (
               <button
-                key={cat}
+                key={category.id}
                 type="button"
-                className={`category-chip ${category === cat ? "chip-active" : ""}`}
-                onClick={() => setCategory(cat)}
+                className={`category-chip ${categoryId === String(category.id) ? "chip-active" : ""}`}
+                aria-pressed={categoryId === String(category.id)}
+                onClick={() => setCategoryId(String(category.id))}
+                disabled={catalogsLoading || Boolean(catalogError)}
               >
-                {cat}
+                {category.nombre}
               </button>
             ))}
           </div>
-          {filtered.length ? (
-            <div className="object-grid">
-              {filtered.map((item) => (
+          {reportsLoading ? (
+            <div className="empty-state" role="status">
+              Cargando reportes…
+            </div>
+          ) : reportError ? (
+            <div className="empty-state" role="alert">
+              <strong>No pudimos cargar los reportes.</strong>
+              <p>{reportError.message}</p>
+              <button type="button" onClick={() => setReportRetry((value) => value + 1)}>
+                Reintentar
+              </button>
+            </div>
+          ) : reports.length > 0 ? (
+            <div className="object-grid" aria-live="polite">
+              {reports.map((item) => (
                 <ObjectCard key={item.id} item={item} />
               ))}
             </div>
@@ -238,8 +277,8 @@ export default function LandingPage() {
                 type="button"
                 onClick={() => {
                   setSearch("");
-                  setCategory("Todas");
-                  setLocation("Todas las ubicaciones");
+                  setCategoryId("");
+                  setLocationId("");
                 }}
               >
                 Limpiar filtros

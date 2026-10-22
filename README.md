@@ -1,158 +1,137 @@
-# BuscaCampus · Avance 1
+# BuscaCampus — Avance 2
 
-Prototipo de una plataforma web para objetos perdidos y encontrados en la Universidad Autónoma de Occidente (UAO). Este repositorio entrega la definición del problema, alcance y arquitectura; el modelo entidad–relación de seis entidades; una API con `GET /api/v1/health` que consulta PostgreSQL; y las vistas responsive de inicio, inicio de sesión y registro.
+Aplicación web para consultar objetos perdidos y encontrados en la Universidad Autónoma de Occidente. Este avance conecta React con una API Express respaldada por PostgreSQL e implementa registro, login con sesión restaurable, reportes CRUD e imágenes guardadas en disco con sus metadatos en la base de datos.
 
-## Problema y objetivo
+## Funcionalidades
 
-En aulas, laboratorios, biblioteca, cafetería y plazoletas del campus se pierden o encuentran pertenencias como carnés, llaves, cargadores y prendas. La búsqueda por canales informales dificulta localizar al dueño y seguir el proceso de devolución. BuscaCampus busca ofrecer un punto de consulta y reporte para la comunidad UAO, con trazabilidad de publicaciones, evidencias y reclamaciones.
+- Registro con correo institucional `@uao.edu.co`, contraseña almacenada con `bcryptjs` y login mediante cookie HttpOnly.
+- Restauración de sesión, logout, rutas públicas y dashboard protegido.
+- Catálogos reales de categorías y ubicaciones, búsqueda y filtros de reportes.
+- Dashboard para consultar, publicar, editar y eliminar reportes propios.
+- Subida multipart de una imagen JPEG, PNG o WebP de hasta 5 MB por reporte.
+- Persistencia dual: archivo físico en `server/uploads/` y metadatos relacionados en PostgreSQL.
+- Estados de carga, error, reintento y contenido vacío en las vistas que consultan la API.
 
-El objetivo del proyecto completo es que un visitante pueda consultar reportes, que un usuario registrado publique pérdidas o hallazgos con fotografías, y que los involucrados gestionen una reclamación hasta la devolución. En este Avance 1, la interfaz usa datos de muestra y los formularios de acceso son maquetas con validación local. La autenticación, los reportes persistidos, la carga de archivos y el flujo de reclamación quedan modelados para siguientes avances; todavía no se presentan como operaciones funcionales.
+Las reclamaciones, la administración completa, el chat, las notificaciones y el almacenamiento cloud están fuera del alcance de este avance.
 
-## Historias de usuario principales
+## Requisitos
 
-1. Como visitante, quiero buscar y filtrar los reportes por categoría y lugar para identificar un objeto.
-2. Como integrante de la comunidad, quiero registrarme e iniciar sesión para publicar objetos perdidos o encontrados con evidencia.
-3. Como autor de un reporte, quiero gestionar su estado hasta marcarlo como devuelto.
-4. Como posible dueño, quiero reclamar un objeto aportando detalles que prueben su propiedad.
+- Node.js 20.19 o posterior y npm.
+- PostgreSQL 14 o posterior.
+- `psql` para aplicar los scripts por terminal, o pgAdmin 4 para ejecutarlos desde Query Tool.
 
-## Arquitectura
+El cliente y el servidor son proyectos npm independientes. `server/package.json` declara Node 18 o posterior; Vite requiere Node 20.19 o posterior para ejecutar el cliente.
 
-```text
-Navegador ── React + Vite (client/) ── HTTP/JSON ── Express (server/)
-                                                   │
-                                                   ├── PostgreSQL: datos relacionales y metadatos
-                                                   └── uploads/: archivos físicos (fase posterior)
-```
+## Puesta en marcha
 
-`client/` y `server/` son proyectos npm independientes. El backend expone la ruta `GET /api/v1/health`, que ejecuta `SELECT NOW()` sobre PostgreSQL en cada solicitud. Una respuesta HTTP 200 confirma que el servidor y la base de datos responden; si la consulta falla, devuelve HTTP 503 sin exponer credenciales.
+### 1. Crear y preparar la base de datos
 
-## ¿Por qué PostgreSQL?
-
-BuscaCampus utiliza PostgreSQL porque el dominio tiene relaciones claras entre usuarios, categorías, ubicaciones, reportes, archivos y reclamaciones. PostgreSQL permite:
-
-- Garantizar integridad referencial mediante claves primarias y foráneas.
-- Aplicar restricciones de unicidad y validaciones `CHECK` directamente en la base de datos.
-- Ejecutar operaciones transaccionales para crear reportes y asociar sus archivos de forma consistente.
-- Consultar y filtrar reportes por categoría, ubicación, tipo y estado.
-- Conservar metadatos de archivos de forma estructurada, mientras los archivos físicos se preparan para almacenarse en `server/uploads/`.
-
-El esquema relacional está definido en [`server/sql/schema.sql`](server/sql/schema.sql) y los datos iniciales en [`server/sql/seed.sql`](server/sql/seed.sql). El modelo entidad–relación se encuentra en [`docs/mer.md`](docs/mer.md), [`docs/mer-buscacampus.mdj`](docs/mer-buscacampus.mdj) y [`docs/mer-buscacampus.jpg`](docs/mer-buscacampus.jpg).
-
-## Conexión y prueba de PostgreSQL desde pgAdmin 4
-
-El backend utiliza PostgreSQL porque el proyecto maneja datos relacionados entre usuarios, categorías, ubicaciones, reportes, archivos y reclamaciones. Esto permite usar claves foráneas, restricciones y transacciones para mantener la integridad de la información.
-
-### 1. Abrir la base de datos en pgAdmin
-
-1. Abrir **pgAdmin 4**.
-2. En el panel **Object Explorer**, expandir **Servers** y seleccionar el servidor instalado, por ejemplo **PostgreSQL 18**.
-3. Expandir **Databases** y seleccionar la base de datos `buscacampus`.
-4. Hacer clic derecho sobre `buscacampus` y elegir **Query Tool**. La pestaña debe mostrar una conexión similar a `buscacampus/postgres@PostgreSQL 18`.
-
-Si la base todavía no existe, crearla desde **Databases → clic derecho → Create → Database**, usando el nombre `buscacampus` y el propietario `postgres`.
-
-### 2. Ejecutar el esquema
-
-En el Query Tool de la base `buscacampus`:
-
-1. Hacer clic en el botón **Open File** (icono de carpeta).
-2. Seleccionar `server/sql/schema.sql`.
-3. Verificar que el archivo se abrió en la pestaña conectada a `buscacampus`.
-4. Ejecutar el script con el botón **Execute/Run** (icono de ▶).
-
-Este archivo crea las tablas, claves, relaciones, restricciones e índices del proyecto.
-
-### 3. Ejecutar los datos iniciales
-
-Repetir el procedimiento anterior con `server/sql/seed.sql`:
-
-1. Abrir `server/sql/seed.sql` desde **Open File**.
-2. Confirmar que la conexión seleccionada sigue siendo `buscacampus`.
-3. Presionar **Execute/Run**.
-
-Este script inserta las categorías y ubicaciones iniciales. Después de ejecutarlo, hacer clic derecho sobre **Schemas → public → Tables** y seleccionar **Refresh** para comprobar que las tablas aparecen.
-
-### 4. Conectar el backend
-
-Configurar `server/.env` con la misma base, usuario, contraseña y puerto utilizados en pgAdmin:
-
-```env
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/buscacampus
-PORT=4000
-CLIENT_ORIGIN=http://localhost:5173
-```
-
-Luego, desde la carpeta `server/`, iniciar el backend:
+Crea una base de datos llamada `buscacampus` en PostgreSQL. Desde la raíz del repositorio, ejecuta el esquema y los datos iniciales:
 
 ```bash
-npm run dev
+psql "postgres://postgres:postgres@localhost:5432/buscacampus" -f server/sql/schema.sql
+psql "postgres://postgres:postgres@localhost:5432/buscacampus" -f server/sql/seed.sql
 ```
 
-### 5. Probar la conexión
+Si ya tienes una base de Avance 1, conserva sus datos y aplica la migración incremental:
 
-Con el backend encendido, abrir en el navegador o en Postman:
-
-```text
-GET http://localhost:4000/api/v1/health
+```bash
+psql "postgres://postgres:postgres@localhost:5432/buscacampus" -f server/sql/migrations/20261020_001_avance2_archivos_mime.sql
 ```
 
-La conexión es correcta cuando el endpoint responde HTTP 200 con `status: "OK"` y `database.connected: true`. Si PostgreSQL no está disponible o las credenciales no coinciden, responde HTTP 503. La prueba fue realizada con éxito y confirmó la conexión entre el backend y la base de datos.
+La migración añade el MIME de los archivos y los índices por reporte y autor. Es idempotente. Para una base nueva, `schema.sql` ya crea esas columnas e índices. El diagrama del modelo relacional está en [`docs/mer.md`](docs/mer.md), con sus archivos fuente en `docs/`.
 
-## Estructura
+En pgAdmin, abre la base `buscacampus`, selecciona **Tools → Query Tool**, carga cada archivo indicado y ejecútalo. Para una base existente, ejecuta la migración antes de iniciar la API.
 
-```text
-buscacampus-project/
-├── .gitignore
-├── .env.example
-├── README.md
-├── docs/
-│   ├── mer.md
-│   ├── mer-buscacampus.jpg
-│   └── mer-buscacampus.mdj
-├── client/
-│   ├── public/
-│   ├── src/
-│   │   ├── components/       Navbar, Footer y tarjetas
-│   │   ├── pages/            LandingPage, Login, Register, Dashboard
-│   │   ├── services/         Cliente de API
-│   │   ├── App.jsx
-│   │   ├── main.jsx
-│   │   └── styles.css
-│   ├── .env.example
-│   ├── index.html
-│   ├── package.json
-│   └── vite.config.js
-└── server/
-    ├── src/
-    │   ├── config/           Pool de PostgreSQL
-    │   ├── controllers/      Lógica de /health
-    │   ├── routes/           Rutas REST
-    │   └── app.js
-    ├── sql/
-    │   ├── schema.sql        Tablas, claves y restricciones
-    │   └── seed.sql          Datos iniciales
-    ├── uploads/
-    ├── .env.example
-    ├── package.json
-    └── server.js
+### 2. Configurar variables de entorno
+
+Crea los archivos locales a partir de los ejemplos:
+
+```bash
+cp server/.env.example server/.env
+cp client/.env.example client/.env
 ```
 
-La carpeta `uploads/` está preparada y excluida de Git salvo el archivo que preserva su estructura. No hay subida de archivos implementada aún.
+En Windows PowerShell puedes usar `Copy-Item server/.env.example server/.env` y `Copy-Item client/.env.example client/.env`.
 
-## Alcance de la entrega
+Configura `server/.env` con tu conexión PostgreSQL y reemplaza `JWT_SECRET` por un valor aleatorio secreto. Puedes generarlo con `openssl rand -base64 48`. Mantén `COOKIE_SECURE=false` en desarrollo local con HTTP; usa `true` cuando publiques el servidor detrás de HTTPS.
 
-| Requisito | Evidencia |
-|---|---|
-| Problema, alcance y arquitectura | Este README |
-| Diagrama E/R o NoSQL | `docs/mer-buscacampus.jpg`, `docs/mer-buscacampus.mdj`, `docs/mer.md`, `server/sql/schema.sql` |
-| Repositorio base frontend/backend | `client/`, `server/`, `.gitignore`, ejemplos de entorno |
-| `/health` y consulta a PostgreSQL | `server/src/controllers/healthController.js` |
-| Esquema y datos iniciales | `server/sql/schema.sql`, `server/sql/seed.sql` |
-| Landing y Login/Registro responsive | `client/src/pages/`, `client/src/styles.css` |
+| Variable del servidor | Propósito                     | Valor de desarrollo del ejemplo                           |
+| --------------------- | ----------------------------- | --------------------------------------------------------- |
+| `PORT`                | Puerto HTTP de Express        | `4000`                                                    |
+| `DATABASE_URL`        | Cadena de conexión PostgreSQL | `postgres://postgres:postgres@localhost:5432/buscacampus` |
+| `CLIENT_ORIGIN`       | Origen permitido por CORS     | `http://localhost:5173`                                   |
+| `PGSSL`               | Activa TLS para PostgreSQL    | `false`                                                   |
+| `JWT_SECRET`          | Clave de firma de sesión      | Reemplazar por un secreto propio                          |
+| `JWT_EXPIRES_IN`      | Vigencia del JWT              | `8h`                                                      |
+| `COOKIE_SECURE`       | Marca Secure de la cookie     | `false` en HTTP local                                     |
 
-### Evidencia de la prueba
+Configura `client/.env` con la URL base de la API:
 
-La siguiente captura muestra la respuesta exitosa del endpoint `/api/v1/health`
-con PostgreSQL conectado:
+```env
+VITE_API_URL=http://localhost:4000/api/v1
+```
 
-![Prueba de conexión entre el backend y PostgreSQL](docs/health-postgresql.png)
+Los archivos `.env` no se suben a Git. No uses el secreto de ejemplo en un entorno compartido.
+
+### 3. Instalar dependencias e iniciar los proyectos
+
+Desde la raíz del repositorio:
+
+```bash
+npm install --prefix server
+npm install --prefix client
+npm run dev --prefix server
+npm run dev --prefix client
+```
+
+La API queda disponible en `http://localhost:4000`; Vite muestra la URL local del cliente, normalmente `http://localhost:5173`. El servidor limita CORS al origen de `CLIENT_ORIGIN` y acepta credenciales; el cliente envía sus peticiones con `credentials: "include"`. Mantén `CLIENT_ORIGIN` y `VITE_API_URL` alineados con los orígenes locales.
+
+Comprueba la conexión de la API y PostgreSQL en `GET http://localhost:4000/api/v1/health`. La respuesta exitosa usa el contrato estándar y contiene `data.database.connected: true`.
+
+## API REST
+
+La especificación completa está en [`docs/openapi.yaml`](docs/openapi.yaml). Todas las rutas API usan el prefijo `/api/v1`. Las respuestas exitosas usan `{ "success": true, "data": ... }`; los errores usan `{ "success": false, "error": { "code", "message", "details" } }`.
+
+| Método   | Ruta             | Acceso                | Descripción                                           |
+| -------- | ---------------- | --------------------- | ----------------------------------------------------- |
+| `GET`    | `/health`        | Público               | Estado de la API y conexión PostgreSQL                |
+| `POST`   | `/auth/registro` | Público               | Crear cuenta institucional; responde `201`            |
+| `POST`   | `/auth/login`    | Público               | Iniciar sesión y establecer cookie                    |
+| `GET`    | `/auth/me`       | Sesión                | Restaurar la sesión actual                            |
+| `POST`   | `/auth/logout`   | Público               | Eliminar la cookie; responde `204`                    |
+| `GET`    | `/categorias`    | Público               | Listar categorías                                     |
+| `GET`    | `/ubicaciones`   | Público               | Listar ubicaciones activas                            |
+| `GET`    | `/reportes`      | Público*              | Listar, buscar y filtrar reportes                     |
+| `GET`    | `/reportes/:id`  | Público               | Consultar un reporte                                  |
+| `POST`   | `/reportes`      | Sesión                | Crear reporte multipart; responde `201`               |
+| `PUT`    | `/reportes/:id`  | Autor o administrador | Actualizar campos y, opcionalmente, reemplazar imagen |
+| `DELETE` | `/reportes/:id`  | Autor o administrador | Eliminar reporte y archivo; responde `204`            |
+
+`GET /reportes` acepta `q`, `categoriaId`, `ubicacionId`, `tipoReporte`, `estado`, `mios`, `page` y `limit`. `mios=true` requiere sesión. La paginación usa por defecto `page=1` y `limit=20`, con máximo de 100 resultados por página. `tipoReporte` admite `Perdido` o `Encontrado`; `estado` admite `Publicado`, `En reclamación` o `Devuelto`.
+
+El registro requiere `nombreCompleto` (3–160 caracteres), `correoElectronico` institucional y `contrasena` (al menos 8 caracteres). El correo se normaliza a minúsculas. El login establece la cookie `buscacampus_session` como HttpOnly y SameSite=Lax; Secure depende de `COOKIE_SECURE`. El JWT viaja únicamente en esa cookie: no se devuelve en el cuerpo ni se guarda en `localStorage` o `sessionStorage`.
+
+Crear reporte requiere los campos `titulo`, `descripcion`, `categoriaId`, `ubicacionId`, `tipoReporte`, `fechaHoraEvento` y un archivo `archivo`. El archivo es obligatorio al crear y opcional al editar. Solo se aceptan JPEG, PNG y WebP de hasta 5 MB. El cliente envía FormData; no debe fijar manualmente el encabezado multipart `Content-Type`.
+
+Los códigos de error relevantes son `400` validación, `401` sesión ausente o credenciales inválidas, `403` permiso insuficiente, `404` recurso inexistente, `409` correo duplicado o dependencia que impide borrar, `413` archivo demasiado grande y `500` error inesperado. Las respuestas no exponen hashes, tokens, secretos, rutas físicas ni trazas.
+
+## Archivos y persistencia dual
+
+Cada archivo se guarda en `server/uploads/` con un nombre generado por UUID. PostgreSQL conserva en `archivos_metadatos` el autor, reporte, nombre original, nombre físico, URL pública, MIME, extensión, peso y fecha de subida. La creación del reporte y sus metadatos se confirma en una transacción; si falla, el archivo cargado se elimina. Los archivos se sirven desde `/uploads/<nombre-uuid>` y no se guardan en Base64.
+
+Al reemplazar una imagen o eliminar un reporte, la API sincroniza la metadata y el archivo físico. La carpeta y sus archivos están excluidos de Git, salvo `server/uploads/.gitkeep`.
+
+## Pruebas y build
+
+```bash
+npm test --prefix server
+npm test --prefix client -- --pool=threads --maxWorkers=1 --reporter=dot
+npm run build --prefix client
+```
+
+El límite de workers del comando cliente hace la suite más estable en equipos Windows. `dist/` es un artefacto local y está excluido de Git.
+
+## Demo
+
+Sigue el guion reproducible de [`docs/demo-avance2.md`](docs/demo-avance2.md) para mostrar autenticación, restauración, protección de rutas, filtros, CRUD y persistencia del archivo y sus metadatos.

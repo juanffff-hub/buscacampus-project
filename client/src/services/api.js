@@ -1,5 +1,6 @@
 const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1")
   .replace(/\/+$/, "");
+const API_ORIGIN = API_URL.replace(/\/api\/v1$/i, "");
 
 export class ApiError extends Error {
   constructor(message, { status = 0, code = "REQUEST_FAILED", details = [] } = {}) {
@@ -81,4 +82,63 @@ export function getCurrentUser() {
 
 export function logout() {
   return apiRequest("/auth/logout", { method: "POST" });
+}
+
+export function getCategories() {
+  return apiRequest("/categorias");
+}
+
+export function getLocations() {
+  return apiRequest("/ubicaciones");
+}
+
+export function getReports(filters = {}) {
+  const query = new URLSearchParams();
+  for (const key of [
+    "q",
+    "categoriaId",
+    "ubicacionId",
+    "tipoReporte",
+    "estado",
+    "page",
+    "limit",
+  ]) {
+    const value = filters[key];
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      query.set(key, String(value).trim());
+    }
+  }
+  if (filters.mios === true || filters.mios === "true") {
+    query.set("mios", "true");
+  }
+  const suffix = query.size ? `?${query}` : "";
+  return apiRequest(`/reportes${suffix}`);
+}
+
+export function getReport(id) {
+  return apiRequest(`/reportes/${encodeURIComponent(id)}`);
+}
+
+export function createReport(formData) {
+  return apiRequest("/reportes", { method: "POST", body: formData });
+}
+
+export function updateReport(id, formData) {
+  return apiRequest(`/reportes/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: formData,
+  });
+}
+
+export function deleteReport(id) {
+  return apiRequest(`/reportes/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export function getApiAssetUrl(path) {
+  if (!path) return "";
+  try {
+    return new URL(path, `${API_ORIGIN}/`).toString();
+  } catch {
+    return path;
+  }
 }
