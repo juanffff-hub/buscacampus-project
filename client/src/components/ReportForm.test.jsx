@@ -1,12 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import ReportForm from "./ReportForm.jsx";
-import { createReport, getCategories, getLocations } from "../services/api.js";
+import {
+  createReport,
+  getApiAssetUrl,
+  getCategories,
+  getLocations,
+  updateReport,
+} from "../services/api.js";
 
 vi.mock("../services/api.js", () => ({
   createReport: vi.fn(),
+  getApiAssetUrl: vi.fn((path) => path ? `http://localhost:4000${path}` : ""),
   getCategories: vi.fn(),
   getLocations: vi.fn(),
+  updateReport: vi.fn(),
 }));
 
 const createdReport = {
@@ -36,6 +44,7 @@ describe("formulario para publicar reportes", () => {
     getCategories.mockResolvedValue({ items: [{ id: "3", nombre: "Llaves" }] });
     getLocations.mockResolvedValue({ items: [{ id: "8", nombre: "Bloque D" }] });
     createReport.mockResolvedValue({ report: createdReport });
+    updateReport.mockResolvedValue({ report: createdReport });
     vi.stubGlobal("URL", {
       createObjectURL: vi.fn(() => "blob:report-preview"),
       revokeObjectURL: vi.fn(),
@@ -126,5 +135,23 @@ describe("formulario para publicar reportes", () => {
     expect(createReport).toHaveBeenCalledTimes(1);
     resolveRequest({ report: createdReport });
     expect(await screen.findByRole("status")).toHaveTextContent("Tu reporte se publicó correctamente");
+  });
+
+  it("precarga un reporte y lo actualiza sin exigir una imagen nueva", async () => {
+    const onSaved = vi.fn();
+    render(<ReportForm report={createdReport} onSaved={onSaved} />);
+    await screen.findByRole("option", { name: "Llaves" });
+
+    expect(screen.getByLabelText("Título")).toHaveValue("Llaves azules");
+    expect(screen.getByLabelText("Descripción")).toHaveValue("Encontradas en el bloque D.");
+    fireEvent.change(screen.getByLabelText("Título"), { target: { value: "Llaves azules corregido" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Los cambios se guardaron correctamente");
+    expect(updateReport).toHaveBeenCalledTimes(1);
+    expect(updateReport.mock.calls[0][0]).toBe("105");
+    expect(updateReport.mock.calls[0][1].get("titulo")).toBe("Llaves azules corregido");
+    expect(updateReport.mock.calls[0][1].get("archivo")).toBeNull();
+    expect(onSaved).toHaveBeenCalledWith(createdReport);
   });
 });

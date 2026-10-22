@@ -5,10 +5,12 @@ import Dashboard from "./Dashboard.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   createReport,
+  deleteReport,
   getApiAssetUrl,
   getCategories,
   getLocations,
   getReports,
+  updateReport,
 } from "../services/api.js";
 
 vi.mock("../context/AuthContext.jsx", () => ({
@@ -17,10 +19,12 @@ vi.mock("../context/AuthContext.jsx", () => ({
 
 vi.mock("../services/api.js", () => ({
   createReport: vi.fn(),
+  deleteReport: vi.fn(),
   getCategories: vi.fn(),
   getApiAssetUrl: vi.fn((path) => `http://localhost:4000${path}`),
   getLocations: vi.fn(),
   getReports: vi.fn(),
+  updateReport: vi.fn(),
 }));
 
 const ownReport = {
@@ -47,11 +51,15 @@ describe("Dashboard de reportes propios", () => {
   beforeEach(() => {
     useAuth.mockReturnValue({ user: { nombreCompleto: "Ana Pérez" } });
     getReports.mockResolvedValue({ items: [ownReport] });
+    deleteReport.mockResolvedValue(null);
     getCategories.mockResolvedValue({ items: [{ id: "4", nombre: "Llaves" }] });
     getLocations.mockResolvedValue({ items: [{ id: "6", nombre: "Bloque C" }] });
   });
 
-  afterEach(() => vi.clearAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
 
   it("consulta mios=true y muestra las tarjetas propias con imagen", async () => {
     renderDashboard();
@@ -118,5 +126,48 @@ describe("Dashboard de reportes propios", () => {
     expect(await screen.findByRole("heading", { name: "Billetera verde" })).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument();
     expect(createReport).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens an existing report for editing and updates its card", async () => {
+    const updatedReport = { ...ownReport, titulo: "Llaves del laboratorio corregido" };
+    updateReport.mockResolvedValue({ report: updatedReport });
+    renderDashboard();
+    await screen.findByRole("heading", { name: "Llaves del laboratorio" });
+    fireEvent.click(screen.getByRole("button", { name: "Editar" }));
+    expect(await screen.findByRole("heading", { name: "Editar reporte" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Título")).toHaveValue("Llaves del laboratorio");
+    fireEvent.change(screen.getByLabelText("Título"), { target: { value: updatedReport.titulo } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+    expect(await screen.findByRole("heading", { name: updatedReport.titulo })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("El reporte se actualizó correctamente");
+    expect(updateReport).toHaveBeenCalledTimes(1);
+    expect(updateReport.mock.calls[0][0]).toBe("92");
+  });
+
+  it("confirma la eliminación y retira el reporte del listado", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderDashboard();
+    await screen.findByRole("heading", { name: "Llaves del laboratorio" });
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("El reporte se eliminó correctamente");
+    expect(screen.queryByRole("heading", { name: "Llaves del laboratorio" })).not.toBeInTheDocument();
+    expect(screen.getByText("0")).toBeInTheDocument();
+    expect(deleteReport).toHaveBeenCalledWith("92");
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    confirmSpy.mockRestore();
+  });
+
+  it("conserva la tarjeta y muestra un error si falla la eliminación", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    deleteReport.mockRejectedValue(new Error("No se pudo eliminar el reporte."));
+    renderDashboard();
+    await screen.findByRole("heading", { name: "Llaves del laboratorio" });
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo eliminar el reporte");
+    expect(screen.getByRole("heading", { name: "Llaves del laboratorio" })).toBeInTheDocument();
+    expect(screen.getByText("1")).toBeInTheDocument();
   });
 });

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import ObjectCard from "../components/ObjectCard.jsx";
 import ReportForm from "../components/ReportForm.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
-import { getApiAssetUrl, getReports } from "../services/api.js";
+import { deleteReport, getApiAssetUrl, getReports } from "../services/api.js";
 
 function toCardItem(report) {
   const rawDate = report.fechaCreacion || report.fechaHoraEvento;
@@ -20,6 +20,7 @@ function toCardItem(report) {
     date,
     description: report.descripcion,
     imageUrl: getApiAssetUrl(report.imagen?.url),
+    source: report,
   };
 }
 
@@ -30,6 +31,9 @@ export default function Dashboard() {
   const [error, setError] = useState(null);
   const [retry, setRetry] = useState(0);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [actionNotice, setActionNotice] = useState(null);
 
   function handleCreated(report) {
     if (report) {
@@ -39,6 +43,34 @@ export default function Dashboard() {
       ]);
     } else {
       setRetry((value) => value + 1);
+    }
+  }
+
+  function handleUpdated(report) {
+    if (report) {
+      setReports((current) => current.map((item) => (
+        String(item.id) === String(report.id) ? toCardItem(report) : item
+      )));
+    } else {
+      setRetry((value) => value + 1);
+    }
+    setEditingId(null);
+    setActionNotice({ type: "success", text: "El reporte se actualizó correctamente." });
+  }
+
+  async function handleDelete(report) {
+    if (!window.confirm(`¿Eliminar el reporte “${report.title}”? Esta acción no se puede deshacer.`)) return;
+    setDeletingId(report.id);
+    setActionNotice(null);
+    try {
+      await deleteReport(report.id);
+      setReports((current) => current.filter((item) => String(item.id) !== String(report.id)));
+      setActionNotice({ type: "success", text: "El reporte se eliminó correctamente." });
+      if (String(editingId) === String(report.id)) setEditingId(null);
+    } catch (requestError) {
+      setActionNotice({ type: "error", text: requestError.message || "No fue posible eliminar el reporte." });
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -97,6 +129,26 @@ export default function Dashboard() {
           </div>
         )}
 
+        {actionNotice && (
+          <p className={`dashboard-action-notice ${actionNotice.type === "error" ? "dashboard-action-error" : "dashboard-action-success"}`} role={actionNotice.type === "error" ? "alert" : "status"}>
+            {actionNotice.text}
+          </p>
+        )}
+
+        {editingId !== null && (() => {
+          const editingReport = reports.find((item) => String(item.id) === String(editingId));
+          return editingReport ? (
+            <div className="dashboard-create-panel">
+              <ReportForm
+                key={`edit-${editingReport.id}`}
+                report={editingReport.source}
+                onSaved={handleUpdated}
+                onCancel={() => setEditingId(null)}
+              />
+            </div>
+          ) : null;
+        })()}
+
         {isLoading ? (
           <div className="dashboard-state" role="status">
             Cargando tus reportes…
@@ -129,6 +181,12 @@ export default function Dashboard() {
                 <div className="owned-report-label">
                   <span>Publicado por ti</span>
                   <span>{report.status}</span>
+                </div>
+                <div className="owned-report-actions">
+                  <button type="button" onClick={() => { setActionNotice(null); setEditingId(report.id); }}>Editar</button>
+                  <button type="button" onClick={() => handleDelete(report)} disabled={deletingId === report.id}>
+                    {deletingId === report.id ? "Eliminando…" : "Eliminar"}
+                  </button>
                 </div>
                 <ObjectCard item={report} />
               </article>
