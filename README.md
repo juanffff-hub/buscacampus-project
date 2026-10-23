@@ -1,6 +1,6 @@
 # BuscaCampus — Avance 2
 
-Aplicación web para consultar objetos perdidos y encontrados en la Universidad Autónoma de Occidente. Este avance conecta React con una API Express respaldada por PostgreSQL e implementa registro, login con sesión restaurable, reportes CRUD e imágenes guardadas en disco con sus metadatos en la base de datos.
+BuscaCampus permite consultar y gestionar reportes de objetos perdidos y encontrados en la Universidad Autónoma de Occidente. Esta guía explica cómo preparar el proyecto, iniciar la aplicación y usar sus funciones. No hace falta conocer el proyecto de antemano.
 
 ## Funcionalidades
 
@@ -27,36 +27,36 @@ El cliente y el servidor son proyectos npm independientes. `server/package.json`
 
 ### 1. Crear y preparar la base de datos
 
-Crea una base de datos llamada `buscacampus` en PostgreSQL. Desde la raíz del repositorio, ejecuta el esquema y los datos iniciales:
+Crea una base de datos llamada `buscacampus` desde pgAdmin o con `createdb -U postgres buscacampus`. Después, abre una terminal en la raíz del repositorio y ejecuta el esquema y los datos iniciales. Si tu usuario de PostgreSQL no es `postgres`, reemplázalo en los comandos:
 
 ```bash
-psql "postgres://postgres:postgres@localhost:5432/buscacampus" -f server/sql/schema.sql
-psql "postgres://postgres:postgres@localhost:5432/buscacampus" -f server/sql/seed.sql
+psql -U postgres -h localhost -p 5432 -d buscacampus -f server/sql/schema.sql
+psql -U postgres -h localhost -p 5432 -d buscacampus -f server/sql/seed.sql
 ```
 
-Si ya tienes una base de Avance 1, conserva sus datos y aplica la migración incremental:
+Si ya tienes una base de Avance 1, conserva sus datos y aplica las dos migraciones en orden:
 
 ```bash
-psql "postgres://postgres:postgres@localhost:5432/buscacampus" -f server/sql/migrations/20261020_001_avance2_archivos_mime.sql
-psql "postgres://postgres:postgres@localhost:5432/buscacampus" -f server/sql/migrations/20261022_001_ubicaciones_uao.sql
+psql -U postgres -h localhost -p 5432 -d buscacampus -f server/sql/migrations/20261020_001_avance2_archivos_mime.sql
+psql -U postgres -h localhost -p 5432 -d buscacampus -f server/sql/migrations/20261022_001_ubicaciones_uao.sql
 ```
 
-La primera migración añade el MIME de los archivos y los índices por reporte y autor. La segunda agrega las ubicaciones oficiales de la UAO y desactiva el catálogo anterior sin eliminar ubicaciones que puedan estar asociadas a reportes. Ambas son idempotentes. Para una base nueva, `schema.sql` y `seed.sql` crean el esquema y el catálogo actual; puedes ejecutar también las migraciones para mantener el mismo procedimiento. El diagrama del modelo relacional está en [`docs/mer.md`](docs/mer.md), con sus archivos fuente en `docs/`.
+La primera migración añade el tipo MIME y los índices de archivos. La segunda agrega las ubicaciones oficiales de la UAO y desactiva las anteriores sin borrar las que estén asociadas a reportes. Para una base nueva, `schema.sql` y `seed.sql` ya preparan el esquema y el catálogo actual. Las migraciones se pueden volver a ejecutar. Consulta el [diagrama del modelo relacional](docs/mer.md) para conocer las relaciones entre las tablas.
 
-En pgAdmin, abre la base `buscacampus`, selecciona **Tools → Query Tool**, carga los archivos indicados y ejecútalos en orden. Para una base existente, ejecuta ambas migraciones antes de iniciar la API.
+Si usas pgAdmin, abre `buscacampus`, selecciona **Tools → Query Tool**, carga cada archivo indicado y ejecútalo. Para actualizar una base existente, aplica las migraciones antes de iniciar el servidor.
 
 ### 2. Configurar variables de entorno
 
-Crea los archivos locales a partir de los ejemplos:
+Copia los archivos de ejemplo para crear la configuración local:
 
 ```bash
 cp server/.env.example server/.env
 cp client/.env.example client/.env
 ```
 
-En Windows PowerShell puedes usar `Copy-Item server/.env.example server/.env` y `Copy-Item client/.env.example client/.env`.
+En Windows PowerShell, usa `Copy-Item server/.env.example server/.env` y `Copy-Item client/.env.example client/.env`.
 
-Configura `server/.env` con tu conexión PostgreSQL y reemplaza `JWT_SECRET` por un valor aleatorio secreto. Puedes generarlo con `openssl rand -base64 48`. Mantén `COOKIE_SECURE=false` en desarrollo local con HTTP; usa `true` cuando publiques el servidor detrás de HTTPS.
+Abre `server/.env` y ajusta `DATABASE_URL` para que coincida con tu usuario, contraseña, host, puerto y nombre de base de datos de PostgreSQL. Sustituye el valor de ejemplo de `JWT_SECRET` por una clave aleatoria. Puedes generarla con `openssl rand -base64 48` o con `node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"`. En desarrollo local con HTTP, deja `COOKIE_SECURE=false`; actívalo solo cuando el servidor use HTTPS. En `client/.env`, conserva `VITE_API_URL=http://localhost:4000/api/v1` para esta configuración local.
 
 | Variable del servidor | Propósito                     | Valor de desarrollo del ejemplo                           |
 | --------------------- | ----------------------------- | --------------------------------------------------------- |
@@ -68,28 +68,38 @@ Configura `server/.env` con tu conexión PostgreSQL y reemplaza `JWT_SECRET` por
 | `JWT_EXPIRES_IN`      | Vigencia del JWT              | `8h`                                                      |
 | `COOKIE_SECURE`       | Marca Secure de la cookie     | `false` en HTTP local                                     |
 
-Configura `client/.env` con la URL base de la API:
-
-```env
-VITE_API_URL=http://localhost:4000/api/v1
-```
-
-Los archivos `.env` no se suben a Git. No uses el secreto de ejemplo en un entorno compartido.
+Los archivos `.env` contienen configuración local y no se suben a Git. No compartas la clave JWT ni uses el valor de ejemplo en un entorno compartido.
 
 ### 3. Instalar dependencias e iniciar los proyectos
 
-Desde la raíz del repositorio:
+Instala las dependencias desde la raíz del repositorio:
 
 ```bash
 npm install --prefix server
 npm install --prefix client
+```
+
+Abre dos terminales en la raíz del repositorio. En la primera, inicia la API:
+
+```bash
 npm run dev --prefix server
+```
+
+En la segunda, inicia el cliente:
+
+```bash
 npm run dev --prefix client
 ```
 
-La API queda disponible en `http://localhost:4000`; Vite muestra la URL local del cliente, normalmente `http://localhost:5173`. El servidor limita CORS al origen de `CLIENT_ORIGIN` y acepta credenciales; el cliente envía sus peticiones con `credentials: "include"`. Mantén `CLIENT_ORIGIN` y `VITE_API_URL` alineados con los orígenes locales.
+Abre la dirección que Vite muestra, normalmente `http://localhost:5173`. El puerto `4000` es la API; su ruta raíz no es una página web. Para comprobar el servidor y PostgreSQL, visita `http://localhost:4000/api/v1/health`; la respuesta debe indicar `success: true` y `data.database.connected: true`. El cliente y `CLIENT_ORIGIN` deben usar los orígenes indicados en los archivos `.env`.
 
-Comprueba la conexión de la API y PostgreSQL en `GET http://localhost:4000/api/v1/health`. La respuesta exitosa usa el contrato estándar y contiene `data.database.connected: true`.
+### 4. Usar la aplicación
+
+1. En la página principal, busca reportes por texto o filtra por categoría y ubicación. Selecciona **Todas las ubicaciones** o **Todas** para quitar esos filtros.
+2. Para publicar un objeto, selecciona **Reportar un objeto** y crea una cuenta con correo `@uao.edu.co` y contraseña de al menos ocho caracteres. Luego inicia sesión.
+3. En el panel **Mis reportes**, selecciona **Publicar reporte**. Completa los campos y adjunta una imagen JPEG, PNG o WebP de hasta 5 MB.
+4. Usa **Editar** para corregir un reporte propio y **Eliminar** para borrarlo. La eliminación solicita confirmación.
+5. Cierra sesión desde la navegación cuando termines.
 
 ## API REST
 
@@ -136,4 +146,9 @@ El límite de workers del comando cliente hace la suite más estable en equipos 
 
 ## Demo
 
-Sigue el guion reproducible de [`docs/demo-avance2.md`](docs/demo-avance2.md) para mostrar autenticación, restauración, protección de rutas, filtros, CRUD y persistencia del archivo y sus metadatos.
+Consulta la [guía paso a paso de la demo](docs/demo-avance2.md). Los videos están disponibles por capítulo en [`Demo Web Avance 2`](Demo%20Web%20Avance%202/):
+
+- [Parte 1 — Registro, login y sesión restaurable](Demo%20Web%20Avance%202/Demo%20Parte%201.%20Registro,%20login%20y%20sesi%C3%B3n%20restaurable.mp4)
+- [Parte 2 — Landing con datos reales y filtros](Demo%20Web%20Avance%202/Demo%20Parte%202.%20Landing%20con%20datos%20reales%20y%20filtros.mp4)
+- [Parte 3 — Crear un reporte con imagen](Demo%20Web%20Avance%202/Demo%20Parte%203.%20Crear%20un%20reporte%20con%20imagen.mp4)
+- [Parte 4 — Editar y eliminar](Demo%20Web%20Avance%202/Demo%20Parte%204.%20Editar%20y%20eliminar.mp4)

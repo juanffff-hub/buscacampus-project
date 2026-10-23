@@ -1,43 +1,55 @@
-# Guion de demo — BuscaCampus Avance 2
+# Guía de demostración — BuscaCampus Avance 2
 
-Duración sugerida: 6–8 minutos. La demo usa PostgreSQL local, la API Express y el cliente React. No requiere servicios cloud.
+Esta guía permite preparar y recorrer la demostración de BuscaCampus sin conocimiento previo del proyecto. Duración sugerida: 6–8 minutos. Se usan PostgreSQL local, la API Express y el cliente React; no hacen falta servicios cloud.
+
+## Videos por capítulo
+
+- [Parte 1 — Registro, login y sesión restaurable](../Demo%20Web%20Avance%202/Demo%20Parte%201.%20Registro,%20login%20y%20sesi%C3%B3n%20restaurable.mp4)
+- [Parte 2 — Landing con datos reales y filtros](../Demo%20Web%20Avance%202/Demo%20Parte%202.%20Landing%20con%20datos%20reales%20y%20filtros.mp4)
+- [Parte 3 — Crear un reporte con imagen](../Demo%20Web%20Avance%202/Demo%20Parte%203.%20Crear%20un%20reporte%20con%20imagen.mp4)
+- [Parte 4 — Editar y eliminar](../Demo%20Web%20Avance%202/Demo%20Parte%204.%20Editar%20y%20eliminar.mp4)
 
 ## Preparación
 
-1. Sigue la configuración del README: instala dependencias, prepara el esquema y el seed, y configura `server/.env` y `client/.env`.
-2. Inicia dos terminales desde la raíz del repositorio:
+1. Completa la [puesta en marcha del README](../README.md#puesta-en-marcha): prepara PostgreSQL, aplica el esquema y el seed, crea los archivos `.env` e instala las dependencias.
+2. Abre dos terminales en la raíz del repositorio. Inicia el servidor en la primera:
 
    ```bash
    npm run dev --prefix server
+   ```
+
+   Inicia el cliente en la segunda:
+
+   ```bash
    npm run dev --prefix client
    ```
 
-3. Abre `http://localhost:5173`. Comprueba también `GET http://localhost:4000/api/v1/health`; debe responder `success: true` y `data.database.connected: true`.
-4. Ten a mano pgAdmin o `psql` para verificar la persistencia al final.
+3. Abre la URL que muestra Vite, normalmente `http://localhost:5173`. El puerto `4000` corresponde a la API; para revisar su estado, abre `http://localhost:4000/api/v1/health` y confirma que la respuesta indica `success: true` y `data.database.connected: true`.
+4. Mantén pgAdmin o una terminal con `psql` disponible para verificar los datos al final. Usa una cuenta de prueba con correo `@uao.edu.co`.
 
 ## Recorrido
 
 ### 1. Registro, login y sesión restaurable
 
-1. Abre **Crear cuenta** (`/register`) y registra una cuenta de prueba con correo `@uao.edu.co`, nombre completo y contraseña de al menos ocho caracteres.
-2. Inicia sesión desde `/login`. Muestra los mensajes de validación con un intento incompleto y luego entra con las credenciales correctas.
-3. Comprueba que la navegación muestra el usuario y el enlace al panel.
-4. Abre `/dashboard` directamente y recarga la página. La sesión debe restaurarse mediante `GET /api/v1/auth/me` y el dashboard debe seguir disponible.
-5. Cierra sesión desde la navegación. Abre `/dashboard` directamente: debe redirigir a `/login`. La cookie de sesión no se guarda en localStorage o sessionStorage.
+1. Selecciona **Crear cuenta** y registra una cuenta de prueba. Usa un correo `@uao.edu.co`, un nombre completo y una contraseña de al menos ocho caracteres.
+2. Abre **Iniciar sesión**. Comprueba que el formulario señala los campos obligatorios y, luego, entra con las credenciales de la cuenta creada.
+3. Confirma que la navegación muestra la cuenta y el acceso al panel.
+4. Abre `http://localhost:5173/dashboard` directamente y recarga la página. La sesión debe restaurarse y el panel debe seguir disponible.
+5. Cierra sesión desde la navegación y vuelve a abrir `/dashboard`. La aplicación debe llevarte a la pantalla de inicio de sesión.
 
 ### 2. Landing con datos reales y filtros
 
-1. Vuelve a iniciar sesión y abre `/`.
-2. Muestra reportes cargados desde `GET /api/v1/reportes`, sus imágenes y los catálogos obtenidos desde `/categorias` y `/ubicaciones`.
-3. Filtra por texto, categoría y ubicación. Verifica un resultado vacío y luego limpia los filtros.
+1. Inicia sesión si la sesión anterior se cerró y vuelve a la página principal.
+2. Revisa los reportes, las imágenes y los filtros de categoría y ubicación.
+3. Busca por una palabra que aparezca en un reporte. Prueba los filtros y, si no hay coincidencias, usa **Limpiar filtros**.
 
 ### 3. Crear un reporte con imagen
 
-1. Entra a `/dashboard` y selecciona **Publicar reporte**.
-2. Completa título, descripción, categoría, ubicación, tipo y fecha/hora; elige un JPEG, PNG o WebP menor de 5 MB.
-3. Muestra la vista previa y publica. El nuevo reporte debe aparecer en el panel sin recargar la página.
-4. En la terminal o el explorador de archivos, confirma que hay un archivo con nombre UUID bajo `server/uploads/`.
-5. Ejecuta esta consulta de solo lectura en pgAdmin o `psql` para comprobar el reporte y sus metadatos:
+1. Abre **Mis reportes** y selecciona **Publicar reporte**.
+2. Completa el título, la descripción, la categoría, la ubicación, el tipo y la fecha del evento. Adjunta una imagen JPEG, PNG o WebP de hasta 5 MB.
+3. Revisa la vista previa y selecciona **Publicar reporte**. El reporte debe aparecer en el panel sin recargar la página. Anota el número que aparece como `Reporte #...` en su tarjeta.
+4. En el explorador de archivos, abre `server/uploads/` y confirma que se guardó una imagen con un nombre generado por la aplicación.
+5. En pgAdmin o `psql`, ejecuta esta consulta de solo lectura para revisar los reportes con imagen. No requiere reemplazar títulos de ejemplo:
 
    ```sql
    SELECT
@@ -54,18 +66,26 @@ Duración sugerida: 6–8 minutos. La demo usa PostgreSQL local, la API Express 
    FROM reportes_objetos AS r
    JOIN usuarios AS u ON u.id = r.usuario_creador_id
    JOIN archivos_metadatos AS a ON a.reporte_id = r.id
-   WHERE r.titulo = 'Título usado en la demo'
-   ORDER BY a.fecha_subida DESC;
+   ORDER BY r.fecha_creacion DESC
+   LIMIT 10;
    ```
 
-   La ruta pública de la respuesta comienza con `/uploads/`; la API no expone rutas absolutas del servidor.
+   La consulta debe mostrar el reporte recién creado entre los más recientes. La ruta pública empieza con `/uploads/`; la API no expone la ruta física del servidor.
 
 ### 4. Editar y eliminar
 
-1. En la tarjeta del reporte recién creado, selecciona **Editar**. Cambia el título o la descripción y guarda sin elegir otro archivo: la imagen actual debe conservarse.
-2. Vuelve a editar y, opcionalmente, selecciona una imagen válida para mostrar su reemplazo.
-3. Selecciona **Eliminar**, confirma la acción y comprueba que desaparece de la lista.
-4. Repite la consulta SQL: el reporte y sus metadatos deben haber desaparecido. Confirma que el archivo correspondiente ya no está en `server/uploads/`.
+1. En la tarjeta del reporte recién creado, selecciona **Editar**. Cambia el título o la descripción y guarda sin adjuntar otra imagen; la imagen actual debe conservarse.
+2. Si quieres comprobar el reemplazo de imagen, vuelve a editar y selecciona otra imagen válida.
+3. Anota el ID del reporte, selecciona **Eliminar** y confirma la acción. Comprueba que desaparece de la lista.
+4. Reemplaza `123` por el ID que anotaste y ejecuta esta consulta. Ambos resultados deben ser `0`:
+
+   ```sql
+   SELECT
+     (SELECT COUNT(*) FROM reportes_objetos WHERE id = 123) AS reportes,
+     (SELECT COUNT(*) FROM archivos_metadatos WHERE reporte_id = 123) AS metadatos;
+   ```
+
+5. Confirma que el archivo físico correspondiente ya no está en `server/uploads/`.
 
 ## Comprobaciones de API y validación
 
