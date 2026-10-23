@@ -30,12 +30,12 @@ vi.mock("../services/api.js", () => ({
 const ownReport = {
   id: "92",
   titulo: "Llaves del laboratorio",
-  descripcion: "Perdidas cerca del bloque C.",
+  descripcion: "Perdidas cerca del aula 1.",
   tipoReporte: "Perdido",
   estado: "Publicado",
   fechaCreacion: "2026-10-20T13:00:00.000Z",
   categoria: { id: "4", nombre: "Llaves" },
-  ubicacion: { id: "6", nombre: "Bloque C" },
+  ubicacion: { id: "1", nombre: "Aula 1" },
   imagen: { url: "/uploads/92.png" },
 };
 
@@ -53,7 +53,7 @@ describe("Dashboard de reportes propios", () => {
     getReports.mockResolvedValue({ items: [ownReport] });
     deleteReport.mockResolvedValue(null);
     getCategories.mockResolvedValue({ items: [{ id: "4", nombre: "Llaves" }] });
-    getLocations.mockResolvedValue({ items: [{ id: "6", nombre: "Bloque C" }] });
+    getLocations.mockResolvedValue({ items: [{ id: "1", nombre: "Aula 1" }] });
   });
 
   afterEach(() => {
@@ -116,7 +116,7 @@ describe("Dashboard de reportes propios", () => {
     fireEvent.change(screen.getByLabelText("Título"), { target: { value: newReport.titulo } });
     fireEvent.change(screen.getByLabelText("Descripción"), { target: { value: newReport.descripcion } });
     fireEvent.change(screen.getByLabelText("Categoría"), { target: { value: "4" } });
-    fireEvent.change(screen.getByLabelText("Ubicación"), { target: { value: "6" } });
+    fireEvent.change(screen.getByLabelText("Ubicación"), { target: { value: "1" } });
     fireEvent.change(screen.getByLabelText("Fecha y hora del evento"), { target: { value: "2026-10-21T06:00" } });
     fireEvent.change(screen.getByLabelText(/Imagen/), {
       target: { files: [new File(["image"], "wallet.png", { type: "image/png" })] },

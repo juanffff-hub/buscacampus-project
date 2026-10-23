@@ -137,7 +137,7 @@ export default function LandingPage() {
               <span className="float-icon">⌖</span>
               <div>
                 <small>Visto por última vez</small>
-                <strong>Biblioteca UAO</strong>
+                <strong>Biblioteca Piso 1</strong>
               </div>
             </div>
             <div className="floating-card floating-bottom">

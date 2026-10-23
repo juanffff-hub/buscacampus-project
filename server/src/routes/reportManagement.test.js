@@ -135,7 +135,7 @@ function makeManagementDb({ ownerId = '7', metadata = [], exists = true, failDel
             categoriaId: state.categoryId,
             categoriaNombre: 'Otros',
             ubicacionId: state.locationId,
-            ubicacionNombre: 'Biblioteca',
+            ubicacionNombre: 'Biblioteca Piso 1',
             imagenId: file?.id || null,
             imagenNombreOriginal: file?.originalName || null,
             imagenNombreFisico: file?.filename || null,

@@ -7,6 +7,7 @@ Aplicación web para consultar objetos perdidos y encontrados en la Universidad 
 - Registro con correo institucional `@uao.edu.co`, contraseña almacenada con `bcryptjs` y login mediante cookie HttpOnly.
 - Restauración de sesión, logout, rutas públicas y dashboard protegido.
 - Catálogos reales de categorías y ubicaciones, búsqueda y filtros de reportes.
+- Ubicaciones UAO: Aula 1–4, Sotanos 1–2, Cafeteria Piso 1–3 y Biblioteca Piso 1–3.
 - Dashboard para consultar, publicar, editar y eliminar reportes propios.
 - Subida multipart de una imagen JPEG, PNG o WebP de hasta 5 MB por reporte.
 - Persistencia dual: archivo físico en `server/uploads/` y metadatos relacionados en PostgreSQL.
@@ -37,11 +38,12 @@ Si ya tienes una base de Avance 1, conserva sus datos y aplica la migración inc
 
 ```bash
 psql "postgres://postgres:postgres@localhost:5432/buscacampus" -f server/sql/migrations/20261020_001_avance2_archivos_mime.sql
+psql "postgres://postgres:postgres@localhost:5432/buscacampus" -f server/sql/migrations/20261022_001_ubicaciones_uao.sql
 ```
 
-La migración añade el MIME de los archivos y los índices por reporte y autor. Es idempotente. Para una base nueva, `schema.sql` ya crea esas columnas e índices. El diagrama del modelo relacional está en [`docs/mer.md`](docs/mer.md), con sus archivos fuente en `docs/`.
+La primera migración añade el MIME de los archivos y los índices por reporte y autor. La segunda agrega las ubicaciones oficiales de la UAO y desactiva el catálogo anterior sin eliminar ubicaciones que puedan estar asociadas a reportes. Ambas son idempotentes. Para una base nueva, `schema.sql` y `seed.sql` crean el esquema y el catálogo actual; puedes ejecutar también las migraciones para mantener el mismo procedimiento. El diagrama del modelo relacional está en [`docs/mer.md`](docs/mer.md), con sus archivos fuente en `docs/`.
 
-En pgAdmin, abre la base `buscacampus`, selecciona **Tools → Query Tool**, carga cada archivo indicado y ejecútalo. Para una base existente, ejecuta la migración antes de iniciar la API.
+En pgAdmin, abre la base `buscacampus`, selecciona **Tools → Query Tool**, carga los archivos indicados y ejecútalos en orden. Para una base existente, ejecuta ambas migraciones antes de iniciar la API.
 
 ### 2. Configurar variables de entorno
 
