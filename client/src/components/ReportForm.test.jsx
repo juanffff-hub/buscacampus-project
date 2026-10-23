@@ -20,19 +20,19 @@ vi.mock("../services/api.js", () => ({
 const createdReport = {
   id: "105",
   titulo: "Llaves azules",
-  descripcion: "Encontradas en el bloque D.",
+  descripcion: "Encontradas en el aula 1.",
   tipoReporte: "Encontrado",
   fechaCreacion: "2026-10-21T11:00:00.000Z",
   categoria: { id: "3", nombre: "Llaves" },
-  ubicacion: { id: "8", nombre: "Bloque D" },
+  ubicacion: { id: "1", nombre: "Aula 1" },
 };
 
 function fillValidForm() {
   fireEvent.change(screen.getByLabelText("Título"), { target: { value: "Llaves azules" } });
-  fireEvent.change(screen.getByLabelText("Descripción"), { target: { value: "Encontradas en el bloque D." } });
+  fireEvent.change(screen.getByLabelText("Descripción"), { target: { value: "Encontradas en el aula 1." } });
   fireEvent.change(screen.getByLabelText("Tipo de reporte"), { target: { value: "Encontrado" } });
   fireEvent.change(screen.getByLabelText("Categoría"), { target: { value: "3" } });
-  fireEvent.change(screen.getByLabelText("Ubicación"), { target: { value: "8" } });
+  fireEvent.change(screen.getByLabelText("Ubicación"), { target: { value: "1" } });
   fireEvent.change(screen.getByLabelText("Fecha y hora del evento"), { target: { value: "2026-10-21T06:00" } });
   const image = new File(["image bytes"], "keys.png", { type: "image/png" });
   fireEvent.change(screen.getByLabelText(/Imagen/), { target: { files: [image] } });
@@ -42,7 +42,7 @@ function fillValidForm() {
 describe("formulario para publicar reportes", () => {
   beforeEach(() => {
     getCategories.mockResolvedValue({ items: [{ id: "3", nombre: "Llaves" }] });
-    getLocations.mockResolvedValue({ items: [{ id: "8", nombre: "Bloque D" }] });
+    getLocations.mockResolvedValue({ items: [{ id: "1", nombre: "Aula 1" }] });
     createReport.mockResolvedValue({ report: createdReport });
     updateReport.mockResolvedValue({ report: createdReport });
     vi.stubGlobal("URL", {
@@ -70,9 +70,9 @@ describe("formulario para publicar reportes", () => {
     const formData = createReport.mock.calls[0][0];
     expect(formData).toBeInstanceOf(FormData);
     expect(formData.get("titulo")).toBe("Llaves azules");
-    expect(formData.get("descripcion")).toBe("Encontradas en el bloque D.");
+    expect(formData.get("descripcion")).toBe("Encontradas en el aula 1.");
     expect(formData.get("categoriaId")).toBe("3");
-    expect(formData.get("ubicacionId")).toBe("8");
+    expect(formData.get("ubicacionId")).toBe("1");
     expect(formData.get("tipoReporte")).toBe("Encontrado");
     expect(formData.get("fechaHoraEvento")).toBe(new Date("2026-10-21T06:00").toISOString());
     expect(formData.get("archivo")).toBe(image);
@@ -143,7 +143,7 @@ describe("formulario para publicar reportes", () => {
     await screen.findByRole("option", { name: "Llaves" });
 
     expect(screen.getByLabelText("Título")).toHaveValue("Llaves azules");
-    expect(screen.getByLabelText("Descripción")).toHaveValue("Encontradas en el bloque D.");
+    expect(screen.getByLabelText("Descripción")).toHaveValue("Encontradas en el aula 1.");
     fireEvent.change(screen.getByLabelText("Título"), { target: { value: "Llaves azules corregido" } });
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
 

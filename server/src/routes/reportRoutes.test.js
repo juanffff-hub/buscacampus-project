@@ -34,8 +34,8 @@ const reportRow = {
   autorNombre: 'Ana Pérez',
   categoriaId: '2',
   categoriaNombre: 'Otros',
-  ubicacionId: '3',
-  ubicacionNombre: 'Biblioteca',
+  ubicacionId: '10',
+  ubicacionNombre: 'Biblioteca Piso 1',
   imagenId: '101',
   imagenNombreOriginal: 'termo.webp',
   imagenNombreFisico: 'cda48ef7-79ef-4ba0-8d67-b1140da251c2.webp',
@@ -82,7 +82,7 @@ test('GET /api/v1/categorias y /ubicaciones expone catálogos ordenados y activo
     }
     if (sql.includes('FROM ubicaciones')) {
       assert.match(sql, /WHERE estado = 'Activo'/);
-      return { rows: [{ id: '3', nombre: 'Biblioteca' }] };
+      return { rows: [{ id: '10', nombre: 'Biblioteca Piso 1' }] };
     }
     throw new Error('Consulta de catálogo inesperada.');
   };
@@ -100,7 +100,7 @@ test('GET /api/v1/categorias y /ubicaciones expone catálogos ordenados y activo
       const locationsResponse = await fetch(`${url}/api/v1/ubicaciones`);
       const locationsBody = await locationsResponse.json();
       assert.equal(locationsResponse.status, 200);
-      assert.deepEqual(locationsBody.data.items, [{ id: '3', nombre: 'Biblioteca' }]);
+      assert.deepEqual(locationsBody.data.items, [{ id: '10', nombre: 'Biblioteca Piso 1' }]);
     });
   } finally {
     pool.query = original;
@@ -142,7 +142,7 @@ test('GET /api/v1/reportes filtra, pagina e incluye autor, catálogos e imagen',
         fechaCreacion: '2026-10-19T16:00:00.000Z',
         autor: { id: '7', nombreCompleto: 'Ana Pérez' },
         categoria: { id: '2', nombre: 'Otros' },
-        ubicacion: { id: '3', nombre: 'Biblioteca' },
+        ubicacion: { id: '10', nombre: 'Biblioteca Piso 1' },
         imagen: {
           id: '101',
           nombreOriginal: 'termo.webp',

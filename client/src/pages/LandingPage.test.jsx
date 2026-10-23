@@ -24,7 +24,7 @@ const report = {
   estado: "Publicado",
   fechaCreacion: "2026-10-20T16:00:00.000Z",
   categoria: { id: "2", nombre: "Otros" },
-  ubicacion: { id: "3", nombre: "Biblioteca" },
+  ubicacion: { id: "10", nombre: "Biblioteca Piso 1" },
   imagen: { url: "/uploads/91.png" },
 };
 
@@ -45,7 +45,7 @@ describe("LandingPage conectada con reportes", () => {
       ],
     });
     getLocations.mockResolvedValue({
-      items: [{ id: "3", nombre: "Biblioteca" }],
+      items: [{ id: "10", nombre: "Biblioteca Piso 1" }],
     });
     getReports.mockResolvedValue({ items: [report] });
   });
@@ -62,7 +62,7 @@ describe("LandingPage conectada con reportes", () => {
       "http://localhost:4000/uploads/91.png",
     );
     expect(screen.getByRole("button", { name: "Llaves" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Biblioteca" })).toHaveValue("3");
+    expect(screen.getByRole("option", { name: "Biblioteca Piso 1" })).toHaveValue("10");
     expect(screen.queryByText(/datos de muestra/i)).not.toBeInTheDocument();
     expect(getApiAssetUrl).toHaveBeenCalledWith("/uploads/91.png");
   });
@@ -76,14 +76,14 @@ describe("LandingPage conectada con reportes", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Llaves" }));
     fireEvent.change(screen.getByRole("combobox", { name: "Filtrar por ubicación" }), {
-      target: { value: "3" },
+      target: { value: "10" },
     });
 
     await waitFor(() => {
       expect(getReports).toHaveBeenLastCalledWith({
         q: "llaves",
         categoriaId: "4",
-        ubicacionId: "3",
+        ubicacionId: "10",
         page: 1,
         limit: 12,
       });

@@ -7,11 +7,17 @@ INSERT INTO categorias (nombre, descripcion) VALUES
 ON CONFLICT (nombre) DO NOTHING;
 
 INSERT INTO ubicaciones (nombre_zona) VALUES
-  ('Biblioteca'),
-  ('Cafetería Central'),
-  ('Bloque A'),
-  ('Bloque C'),
-  ('Plazoleta Central'),
-  ('Laboratorios')
+  ('Aula 1'),
+  ('Aula 2'),
+  ('Aula 3'),
+  ('Aula 4'),
+  ('Sotanos 1'),
+  ('Sotanos 2'),
+  ('Cafeteria Piso 1'),
+  ('Cafeteria Piso 2'),
+  ('Cafeteria Piso 3'),
+  ('Biblioteca Piso 1'),
+  ('Biblioteca Piso 2'),
+  ('Biblioteca Piso 3')
 ON CONFLICT (nombre_zona) DO NOTHING;
 
