@@ -22,9 +22,7 @@ const createReportSchema = z.object({
   fechaHoraEvento: z.coerce.date().transform(value => value.toISOString()),
 }).strict();
 
-const updateReportSchema = createReportSchema.extend({
-  estado: z.enum(['Publicado', 'En reclamación', 'Devuelto']).optional(),
-});
+const updateReportSchema = createReportSchema;
 
 module.exports = {
   reportIdSchema,

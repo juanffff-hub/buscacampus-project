@@ -13,8 +13,13 @@ const listClaimsSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 }).strict();
 
+const claimDecisionSchema = z.object({
+  estado: z.enum(['Aprobada', 'Rechazada']),
+}).strict();
+
 module.exports = {
   createClaimSchema,
   claimIdSchema,
   listClaimsSchema,
+  claimDecisionSchema,
 };

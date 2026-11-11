@@ -151,6 +151,105 @@ async function findClaimById(id) {
   return result.rows[0] || null;
 }
 
+async function findClaimByIdWithExecutor(id, executor = pool) {
+  const result = await executor.query(`${CLAIM_SELECT} WHERE c.id = $1`, [id]);
+  return result.rows[0] || null;
+}
+
+async function decideClaim({ id, status, actor }) {
+  const client = await pool.connect();
+  let transactionOpen = false;
+  try {
+    await client.query('BEGIN');
+    transactionOpen = true;
+
+    const claimReference = await client.query(
+      'SELECT reporte_id::text AS "reporteId" FROM reclamaciones WHERE id = $1',
+      [id],
+    );
+    if (!claimReference.rows[0]) {
+      throw new ApiError(404, 'CLAIM_NOT_FOUND', 'La reclamación solicitada no existe.');
+    }
+
+    const lockedReport = await client.query(
+      `SELECT id::text AS id,
+              usuario_creador_id::text AS "ownerId",
+              estado AS "status"
+       FROM reportes_objetos
+       WHERE id = $1
+       FOR UPDATE`,
+      [claimReference.rows[0].reporteId],
+    );
+    const report = lockedReport.rows[0];
+    if (!report) throw new ApiError(404, 'REPORT_NOT_FOUND', 'El reporte solicitado no existe.');
+    if (String(actor.id) !== report.ownerId && actor.rol !== 'Administrador') {
+      throw new ApiError(403, 'FORBIDDEN', 'Solo el autor del reporte o un administrador puede decidir la reclamación.');
+    }
+
+    const lockedClaim = await client.query(
+      'SELECT estado FROM reclamaciones WHERE id = $1 FOR UPDATE',
+      [id],
+    );
+    if (!lockedClaim.rows[0]) {
+      throw new ApiError(404, 'CLAIM_NOT_FOUND', 'La reclamación solicitada no existe.');
+    }
+    if (lockedClaim.rows[0].estado !== 'Pendiente') {
+      throw new ApiError(409, 'CLAIM_ALREADY_DECIDED', 'La reclamación ya fue decidida.');
+    }
+
+    await client.query(
+      'UPDATE reclamaciones SET estado = $1 WHERE id = $2 AND estado = \'Pendiente\'',
+      [status, id],
+    );
+
+    if (status === 'Aprobada') {
+      await client.query(
+        `UPDATE reclamaciones
+         SET estado = 'Rechazada'
+         WHERE reporte_id = $1 AND id <> $2 AND estado = 'Pendiente'`,
+        [claimReference.rows[0].reporteId, id],
+      );
+      await client.query(
+        "UPDATE reportes_objetos SET estado = 'Devuelto' WHERE id = $1",
+        [claimReference.rows[0].reporteId],
+      );
+    } else {
+      const remaining = await client.query(
+        `SELECT COUNT(*) FILTER (WHERE estado = 'Pendiente')::text AS pendientes,
+                COUNT(*) FILTER (WHERE estado = 'Aprobada')::text AS aprobadas
+         FROM reclamaciones
+         WHERE reporte_id = $1`,
+        [claimReference.rows[0].reporteId],
+      );
+      const pendingCount = Number(remaining.rows[0]?.pendientes || 0);
+      const approvedCount = Number(remaining.rows[0]?.aprobadas || 0);
+      if (pendingCount === 0 && approvedCount === 0) {
+        await client.query(
+          "UPDATE reportes_objetos SET estado = 'Publicado' WHERE id = $1",
+          [claimReference.rows[0].reporteId],
+        );
+      }
+    }
+
+    const updated = await findClaimByIdWithExecutor(id, client);
+    if (!updated) throw new ApiError(404, 'CLAIM_NOT_FOUND', 'La reclamación solicitada no existe.');
+    await client.query('COMMIT');
+    transactionOpen = false;
+    return updated;
+  } catch (error) {
+    if (transactionOpen) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // Preserve the original SQL or business error.
+      }
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function findReportOwner(reportId) {
   const result = await pool.query(
     `SELECT id::text AS id, usuario_creador_id::text AS "ownerId"
@@ -200,6 +299,7 @@ module.exports = {
   createClaim,
   validateClaimableReport,
   findClaimById,
+  decideClaim,
   findReportOwner,
   listClaimsForReport,
   listClaimsForUser,

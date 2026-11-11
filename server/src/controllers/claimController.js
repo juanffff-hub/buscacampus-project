@@ -1,7 +1,7 @@
 const ApiError = require('../errors/ApiError');
 const fs = require('node:fs/promises');
 const claimService = require('../services/claimService');
-const { createClaimSchema, claimIdSchema, listClaimsSchema } = require('../schemas/claimSchemas');
+const { createClaimSchema, claimIdSchema, listClaimsSchema, claimDecisionSchema } = require('../schemas/claimSchemas');
 const { reportIdSchema } = require('../schemas/reportSchemas');
 const { sendSuccess } = require('../utils/responses');
 const { deletePrivateEvidenceFile } = require('../middleware/claimEvidenceUpload');
@@ -79,4 +79,11 @@ async function getEvidence(req, res, next) {
   });
 }
 
-module.exports = { create, listByReport, listMine, getById, getEvidence };
+async function updateStatus(req, res) {
+  const id = claimIdSchema.parse(req.params.id);
+  const input = claimDecisionSchema.parse(req.body);
+  const reclamacion = await claimService.decideClaim(id, input.estado, req.user);
+  return sendSuccess(res, { reclamacion });
+}
+
+module.exports = { create, listByReport, listMine, getById, getEvidence, updateStatus };

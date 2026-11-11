@@ -126,6 +126,11 @@ async function getClaimEvidence(id, actor) {
   };
 }
 
+async function decideClaim(id, status, actor) {
+  const row = await claimRepository.decideClaim({ id, status, actor });
+  return toPublicClaim(row);
+}
+
 module.exports = {
   createClaim,
   toEvidenceMetadata,
@@ -134,4 +139,5 @@ module.exports = {
   listMyClaims,
   getClaim,
   getClaimEvidence,
+  decideClaim,
 };
