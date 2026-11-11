@@ -60,12 +60,13 @@ function makeMetadata(filename, overrides = {}) {
   };
 }
 
-function makeManagementDb({ ownerId = '7', metadata = [], exists = true, failDelete = false } = {}) {
+function makeManagementDb({ ownerId = '7', metadata = [], exists = true, failDelete = false, hasClaims = false } = {}) {
   const state = {
     ownerId,
     metadata: metadata.map(item => ({ ...item })),
     exists,
     failDelete,
+    hasClaims,
     title: 'Termo verde',
     description: 'Encontrado en la biblioteca.',
     categoryId: '2',
@@ -85,8 +86,13 @@ function makeManagementDb({ ownerId = '7', metadata = [], exists = true, failDel
       if (statement === 'BEGIN' || statement === 'COMMIT' || statement === 'ROLLBACK') {
         return { rows: [] };
       }
-      if (statement.startsWith('SELECT id::text AS id, usuario_creador_id::text AS "ownerId"')) {
-        return { rows: state.exists ? [{ id: '91', ownerId: state.ownerId }] : [] };
+      if (statement.startsWith('SELECT id::text AS id, usuario_creador_id::text AS "ownerId", tipo_reporte AS "type"')) {
+        return { rows: state.exists ? [{
+          id: '91', ownerId: state.ownerId, type: state.type, status: state.status,
+        }] : [] };
+      }
+      if (statement.startsWith('SELECT EXISTS (SELECT 1 FROM reclamaciones')) {
+        return { rows: [{ hasClaims: state.hasClaims }] };
       }
       if (statement.startsWith('UPDATE reportes_objetos')) {
         state.title = values[0];
@@ -95,7 +101,6 @@ function makeManagementDb({ ownerId = '7', metadata = [], exists = true, failDel
         state.locationId = values[3];
         state.type = values[4];
         state.eventDate = values[5];
-        state.status = values[6] || state.status;
         return { rows: [] };
       }
       if (statement.startsWith('SELECT nombre_fisico AS filename')) {
@@ -148,7 +153,7 @@ function makeManagementDb({ ownerId = '7', metadata = [], exists = true, failDel
         };
       }
       if (statement.startsWith('DELETE FROM reportes_objetos')) {
-        if (state.failDelete) {
+        if (state.failDelete || state.hasClaims) {
           const error = new Error('private foreign key detail');
           error.code = '23503';
           throw error;
@@ -226,14 +231,14 @@ test('PUT /api/v1/reportes/:id actualiza y reemplaza metadata/archivo solo tras 
       const response = await fetch(`${url}/api/v1/reportes/91`, {
         method: 'PUT',
         headers: { Cookie: sessionCookie() },
-        body: makeReportForm({ image: true, overrides: { estado: 'Devuelto' } }),
+        body: makeReportForm({ image: true }),
       });
       const body = await response.json();
 
       assert.equal(response.status, 200, JSON.stringify(body));
       assert.equal(body.success, true);
       assert.equal(body.data.report.titulo, 'Termo actualizado');
-      assert.equal(body.data.report.estado, 'Devuelto');
+      assert.equal(body.data.report.estado, 'Publicado');
       assert.equal(body.data.report.imagen.nombreOriginal, 'nuevo.png');
       assert.equal(body.data.report.imagen.nombreFisico, newName);
       assert.deepEqual(db.state.metadata.map(file => file.filename), [newName]);
@@ -247,6 +252,38 @@ test('PUT /api/v1/reportes/:id actualiza y reemplaza metadata/archivo solo tras 
     await removeIfPresent(oldName);
     await removeIfPresent(newName);
   }
+});
+
+test('PUT /api/v1/reportes/:id rechaza cambios directos de estado', async () => {
+  const db = makeManagementDb();
+  await withManagementContext({ db }, () => withServer(async url => {
+    const response = await fetch(`${url}/api/v1/reportes/91`, {
+      method: 'PUT',
+      headers: { Cookie: sessionCookie() },
+      body: makeReportForm({ overrides: { estado: 'Devuelto' } }),
+    });
+    const body = await response.json();
+    assert.equal(response.status, 400);
+    assert.equal(body.error.code, 'VALIDATION_ERROR');
+    assert.equal(db.state.calls.length, 0);
+    assert.equal(db.state.status, 'Publicado');
+  }));
+});
+
+test('PUT /api/v1/reportes/:id no permite cambiar el tipo cuando ya tiene reclamaciones', async () => {
+  const db = makeManagementDb({ hasClaims: true });
+  await withManagementContext({ db }, () => withServer(async url => {
+    const response = await fetch(`${url}/api/v1/reportes/91`, {
+      method: 'PUT',
+      headers: { Cookie: sessionCookie() },
+      body: makeReportForm({ overrides: { tipoReporte: 'Perdido' } }),
+    });
+    const body = await response.json();
+    assert.equal(response.status, 409);
+    assert.equal(body.error.code, 'REPORT_HAS_CLAIMS');
+    assert.equal(db.state.type, 'Encontrado');
+    assert.equal(db.state.calls.some(call => call.statement.startsWith('UPDATE reportes_objetos')), false);
+  }));
 });
 
 test('PUT /api/v1/reportes/:id conserva la imagen cuando no se adjunta otra', async () => {
@@ -359,10 +396,10 @@ test('administrador puede eliminar reportes de otro autor', async () => {
   }));
 });
 
-test('DELETE /api/v1/reportes/:id restaura el archivo si la transacción falla', async () => {
+test('DELETE /api/v1/reportes/:id responde 409 y restaura archivos cuando hay reclamaciones', async () => {
   const oldName = '25000000-0000-4000-8000-000000000001.png';
   const oldPath = await writeExistingImage(oldName);
-  const db = makeManagementDb({ metadata: [makeMetadata(oldName)], failDelete: true });
+  const db = makeManagementDb({ metadata: [makeMetadata(oldName)], hasClaims: true });
   try {
     await withManagementContext({ db }, () => withServer(async url => {
       const response = await fetch(`${url}/api/v1/reportes/91`, {

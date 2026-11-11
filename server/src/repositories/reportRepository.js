@@ -184,7 +184,10 @@ async function createReport(input, file, userId) {
 
 async function lockReportForManagement(client, id, actor) {
   const result = await client.query(
-    `SELECT id::text AS id, usuario_creador_id::text AS "ownerId"
+    `SELECT id::text AS id,
+            usuario_creador_id::text AS "ownerId",
+            tipo_reporte AS "type",
+            estado AS "status"
      FROM reportes_objetos
      WHERE id = $1
      FOR UPDATE`,
@@ -207,7 +210,20 @@ async function updateReport(id, input, file, actor) {
   try {
     await client.query('BEGIN');
     transactionOpen = true;
-    await lockReportForManagement(client, id, actor);
+    const lockedReport = await lockReportForManagement(client, id, actor);
+
+    if (input.tipoReporte !== lockedReport.type) {
+      if (lockedReport.status === 'Devuelto') {
+        throw new ApiError(409, 'RETURNED_REPORT_TYPE_LOCKED', 'No se puede cambiar el tipo de un reporte ya devuelto.');
+      }
+      const claims = await client.query(
+        'SELECT EXISTS (SELECT 1 FROM reclamaciones WHERE reporte_id = $1) AS "hasClaims"',
+        [id],
+      );
+      if (claims.rows[0]?.hasClaims) {
+        throw new ApiError(409, 'REPORT_HAS_CLAIMS', 'No se puede cambiar el tipo de un reporte con reclamaciones.');
+      }
+    }
 
     await client.query(
       `UPDATE reportes_objetos
@@ -216,9 +232,8 @@ async function updateReport(id, input, file, actor) {
            categoria_id = $3,
            ubicacion_id = $4,
            tipo_reporte = $5,
-           fecha_hora_evento = $6,
-           estado = COALESCE($7, estado)
-       WHERE id = $8`,
+           fecha_hora_evento = $6
+       WHERE id = $7`,
       [
         input.titulo,
         input.descripcion,
@@ -226,7 +241,6 @@ async function updateReport(id, input, file, actor) {
         input.ubicacionId,
         input.tipoReporte,
         input.fechaHoraEvento,
-        input.estado || null,
         id,
       ],
     );
