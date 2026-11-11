@@ -1,6 +1,32 @@
 const pool = require('../config/database');
 const ApiError = require('../errors/ApiError');
 
+const CLAIM_SELECT = `
+  SELECT c.id::text AS id,
+         c.reporte_id::text AS "reporteId",
+         c.usuario_reclamante_id::text AS "reclamanteId",
+         claimant.nombre_completo AS "reclamanteNombre",
+         c.mensaje_prueba AS "mensajePrueba",
+         c.fecha_reclamacion AS "fechaReclamacion",
+         c.estado AS "estado",
+         r.titulo AS "reporteTitulo",
+         r.tipo_reporte AS "reporteTipo",
+         r.estado AS "reporteEstado",
+         r.usuario_creador_id::text AS "autorReporteId",
+         owner.nombre_completo AS "autorReporteNombre",
+         evidence.id::text AS "evidenciaId",
+         evidence.nombre_original AS "evidenciaNombreOriginal",
+         evidence.mime_type AS "evidenciaMimeType",
+         evidence.extension AS "evidenciaExtension",
+         evidence.peso_bytes::text AS "evidenciaPesoBytes",
+         evidence.fecha_subida AS "evidenciaFechaSubida",
+         evidence.nombre_fisico AS "evidenciaNombreFisico"
+  FROM reclamaciones c
+  JOIN usuarios claimant ON claimant.id = c.usuario_reclamante_id
+  JOIN reportes_objetos r ON r.id = c.reporte_id
+  JOIN usuarios owner ON owner.id = r.usuario_creador_id
+  LEFT JOIN reclamaciones_archivos_metadatos evidence ON evidence.reclamacion_id = c.id`;
+
 function validateClaimableReport(report, userId) {
   if (report.ownerId === String(userId)) {
     throw new ApiError(409, 'REPORT_OWNER_CANNOT_CLAIM', 'No puedes reclamar un reporte que publicaste.');
@@ -120,4 +146,61 @@ async function createClaim({ reportId, userId, message, evidence }) {
   }
 }
 
-module.exports = { createClaim, validateClaimableReport };
+async function findClaimById(id) {
+  const result = await pool.query(`${CLAIM_SELECT} WHERE c.id = $1`, [id]);
+  return result.rows[0] || null;
+}
+
+async function findReportOwner(reportId) {
+  const result = await pool.query(
+    `SELECT id::text AS id, usuario_creador_id::text AS "ownerId"
+     FROM reportes_objetos
+     WHERE id = $1`,
+    [reportId],
+  );
+  return result.rows[0] || null;
+}
+
+async function listClaims({ where, values, page, limit }) {
+  const count = await pool.query(
+    `SELECT COUNT(*)::text AS total
+     FROM reclamaciones c${where}`,
+    values,
+  );
+  const limitParameter = values.length + 1;
+  const offsetParameter = values.length + 2;
+  const result = await pool.query(
+    `${CLAIM_SELECT}${where}
+     ORDER BY c.fecha_reclamacion DESC, c.id DESC
+     LIMIT $${limitParameter} OFFSET $${offsetParameter}`,
+    [...values, limit, (page - 1) * limit],
+  );
+  return { rows: result.rows, total: Number(count.rows[0]?.total || 0) };
+}
+
+async function listClaimsForReport({ reportId, page, limit }) {
+  return listClaims({
+    where: ' WHERE c.reporte_id = $1',
+    values: [reportId],
+    page,
+    limit,
+  });
+}
+
+async function listClaimsForUser({ userId, page, limit }) {
+  return listClaims({
+    where: ' WHERE c.usuario_reclamante_id = $1',
+    values: [userId],
+    page,
+    limit,
+  });
+}
+
+module.exports = {
+  createClaim,
+  validateClaimableReport,
+  findClaimById,
+  findReportOwner,
+  listClaimsForReport,
+  listClaimsForUser,
+};
