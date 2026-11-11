@@ -11,6 +11,8 @@ erDiagram
     USUARIOS ||--o{ ARCHIVOS_METADATOS : sube
     USUARIOS ||--o{ RECLAMACIONES : realiza
     REPORTES_OBJETOS ||--o{ RECLAMACIONES : recibe
+    RECLAMACIONES ||--|| RECLAMACIONES_ARCHIVOS_METADATOS : evidencia
+    USUARIOS ||--o{ RECLAMACIONES_ARCHIVOS_METADATOS : sube
 
     USUARIOS {
       bigint id PK
@@ -63,11 +65,23 @@ erDiagram
       datetime fecha_reclamacion
       string estado "Pendiente | Aprobada | Rechazada"
     }
+    RECLAMACIONES_ARCHIVOS_METADATOS {
+      bigint id PK
+      bigint reclamacion_id FK, UK
+      bigint usuario_autor_id FK
+      string nombre_original
+      string nombre_fisico UK
+      string mime_type
+      string extension
+      bigint peso_bytes
+      string ubicacion_interna
+      datetime fecha_subida
+    }
 ```
 
 ## Cardinalidades y reglas
 
-Cada reporte requiere exactamente un autor, una categoría y una ubicación. Cada archivo tiene exactamente un reporte y un usuario que lo subió. Una reclamación corresponde exactamente a un usuario y un reporte. Las entidades padre pueden existir sin hijos. El reporte exige **al menos un archivo** según el MER, regla que deberá comprobar la operación de creación en una transacción porque una clave foránea por sí sola no la garantiza. Se permite una reclamación por usuario y reporte; su estado permite registrar la decisión. La contraseña se guarda como hash, nunca en texto claro.
+Cada reporte requiere exactamente un autor, una categoría y una ubicación. Cada imagen pública tiene exactamente un reporte y un usuario que la subió. Una reclamación corresponde exactamente a un usuario y un reporte, y guarda una evidencia privada con sus metadatos y autoría. Se permite una reclamación por usuario y reporte; su estado conserva la decisión. La contraseña se guarda como hash, nunca en texto claro. La evidencia se sirve por una ruta autenticada y autorizada; no forma parte del directorio público `uploads`.
 
 El SQL ejecutable está en [`server/sql/schema.sql`](../server/sql/schema.sql). Los nombres en plural de tablas corresponden a las seis entidades del diagrama entregado. La categoría, la ubicación y la autoría del archivo se modelan como relaciones explícitas, a diferencia del borrador de tres entidades de la primera descripción.
 
