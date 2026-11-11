@@ -5,6 +5,7 @@ client/.env
 server/.env
 server/uploads/*
 !server/uploads/.gitkeep
+server/private_uploads/
 *.log
 .DS_Store
 
