@@ -247,6 +247,16 @@ test('solo autor o administrador decide y una transición repetida devuelve 409'
   }));
 });
 
+test('un administrador puede decidir una reclamación de otro autor', async () => {
+  const db = makeDecisionDb({ claims: [{ id: '301', status: 'Pendiente' }] });
+  await withDecisionContext({ db }, () => withServer(async url => {
+    const response = await decide(url, '301', 'Rechazada', '9');
+    assert.equal(response.status, 200);
+    assert.equal(db.state.claims[0].status, 'Rechazada');
+    assert.equal(db.state.report.status, 'Publicado');
+  }));
+});
+
 test('dos decisiones simultáneas sobre reclamaciones del reporte no pueden aprobar ambas', async () => {
   const db = makeDecisionDb();
   await withDecisionContext({ db }, () => withServer(async url => {

@@ -85,6 +85,17 @@ test('rechaza MIME no permitido y contenido cuya firma no coincide, y limpia el 
       assert.equal(unsupported.status, 400);
       assert.equal((await unsupported.json()).error.code, 'UNSUPPORTED_FILE_TYPE');
 
+      const mismatchedExtension = await fetch(`${url}/upload`, {
+        method: 'POST',
+        body: multipartFile(
+          Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+          'image/png',
+          'fake.jpg',
+        ),
+      });
+      assert.equal(mismatchedExtension.status, 400);
+      assert.equal((await mismatchedExtension.json()).error.code, 'UNSUPPORTED_FILE_EXTENSION');
+
       const invalid = await fetch(`${url}/upload`, {
         method: 'POST',
         body: multipartFile(Buffer.from('not a png'), 'image/png', 'fake.png'),

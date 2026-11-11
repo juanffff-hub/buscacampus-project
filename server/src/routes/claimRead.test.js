@@ -137,6 +137,35 @@ test('mis reclamaciones requiere sesión y valida la paginación antes de consul
   }));
 });
 
+test('GET reclamaciones del reporte devuelve 403 a terceros y 404 si el reporte falta', async () => {
+  let countQueries = 0;
+  await withQueryContext({
+    query: async (sql, values = []) => {
+      if (sql.includes('SELECT id::text AS id, usuario_creador_id')) {
+        return { rows: values[0] === '91' ? [{ id: '91', ownerId: '7' }] : [] };
+      }
+      if (sql.includes('COUNT(*)::text AS total')) {
+        countQueries += 1;
+        return { rows: [{ total: '0' }] };
+      }
+      if (sql.includes('FROM reclamaciones c')) return { rows: [] };
+      throw new Error(`Unexpected report claim query: ${sql}`);
+    },
+  }, async () => withServer(async url => {
+    const forbidden = await fetch(`${url}/api/v1/reportes/91/reclamaciones`, {
+      headers: { Cookie: sessionCookie('8') },
+    });
+    assert.equal(forbidden.status, 403);
+    assert.equal(countQueries, 0);
+
+    const missing = await fetch(`${url}/api/v1/reportes/999/reclamaciones`, {
+      headers: { Cookie: sessionCookie('7') },
+    });
+    assert.equal(missing.status, 404);
+    assert.equal(countQueries, 0);
+  }));
+});
+
 test('el autor, el reclamante y el administrador consultan detalle; terceros reciben 403', async () => {
   await withQueryContext({
     query: async (_sql, values) => ({ rows: values[0] === '999' ? [] : [claimRow] }),

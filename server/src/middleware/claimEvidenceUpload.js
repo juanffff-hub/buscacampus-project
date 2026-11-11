@@ -12,6 +12,11 @@ const MIME_TO_EXTENSION = Object.freeze({
   'image/png': '.png',
   'image/webp': '.webp',
 });
+const MIME_TO_SOURCE_EXTENSIONS = Object.freeze({
+  'image/jpeg': ['.jpg', '.jpeg'],
+  'image/png': ['.png'],
+  'image/webp': ['.webp'],
+});
 const PHYSICAL_NAME_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$/i;
 
 function ensurePrivateDirectory() {
@@ -74,6 +79,14 @@ const multerUpload = multer({
         400,
         'UNSUPPORTED_FILE_TYPE',
         'La evidencia debe ser una imagen JPEG, PNG o WebP.',
+      ));
+    }
+    const sourceExtension = path.extname(file.originalname || '').toLowerCase();
+    if (!MIME_TO_SOURCE_EXTENSIONS[file.mimetype].includes(sourceExtension)) {
+      return callback(new ApiError(
+        400,
+        'UNSUPPORTED_FILE_EXTENSION',
+        'La extensión del archivo debe coincidir con su tipo de imagen.',
       ));
     }
     return callback(null, true);

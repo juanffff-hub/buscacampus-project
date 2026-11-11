@@ -153,7 +153,7 @@ function makeManagementDb({ ownerId = '7', metadata = [], exists = true, failDel
         };
       }
       if (statement.startsWith('DELETE FROM reportes_objetos')) {
-        if (state.failDelete) {
+        if (state.failDelete || state.hasClaims) {
           const error = new Error('private foreign key detail');
           error.code = '23503';
           throw error;
@@ -396,10 +396,10 @@ test('administrador puede eliminar reportes de otro autor', async () => {
   }));
 });
 
-test('DELETE /api/v1/reportes/:id restaura el archivo si la transacción falla', async () => {
+test('DELETE /api/v1/reportes/:id responde 409 y restaura archivos cuando hay reclamaciones', async () => {
   const oldName = '25000000-0000-4000-8000-000000000001.png';
   const oldPath = await writeExistingImage(oldName);
-  const db = makeManagementDb({ metadata: [makeMetadata(oldName)], failDelete: true });
+  const db = makeManagementDb({ metadata: [makeMetadata(oldName)], hasClaims: true });
   try {
     await withManagementContext({ db }, () => withServer(async url => {
       const response = await fetch(`${url}/api/v1/reportes/91`, {

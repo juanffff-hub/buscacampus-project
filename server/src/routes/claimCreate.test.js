@@ -37,9 +37,9 @@ function claimForm({ message = 'La funda tiene una marca personal.', image = tru
   return form;
 }
 
-function makeClaimDb({ report = {}, duplicate = false, failEvidence = false } = {}) {
+function makeClaimDb({ report = {}, duplicate = false, failEvidence = false, missingReport = false } = {}) {
   const state = {
-    report: {
+    report: missingReport ? null : {
       id: '91',
       ownerId: '7',
       type: 'Encontrado',
@@ -63,7 +63,7 @@ function makeClaimDb({ report = {}, duplicate = false, failEvidence = false } = 
           const statement = sql.trim().replace(/\s+/g, ' ');
           state.calls.push({ statement, values });
           if (statement === 'BEGIN') {
-            snapshot = { claim: state.claim, evidence: state.evidence, status: state.report.status };
+            snapshot = { claim: state.claim, evidence: state.evidence, status: state.report?.status };
             return { rows: [] };
           }
           if (statement.includes('FROM reportes_objetos') && statement.endsWith('FOR UPDATE')) {
@@ -125,7 +125,7 @@ function makeClaimDb({ report = {}, duplicate = false, failEvidence = false } = 
           if (statement === 'ROLLBACK') {
             state.claim = snapshot?.claim || null;
             state.evidence = snapshot?.evidence || null;
-            if (snapshot) state.report.status = snapshot.status;
+            if (snapshot && state.report) state.report.status = snapshot.status;
             return { rows: [] };
           }
           throw new Error(`Unexpected claim transaction query: ${statement}`);
@@ -229,6 +229,72 @@ test('POST de reclamación requiere sesión y una imagen de evidencia', async ()
     assert.equal(body.error.code, 'EVIDENCE_REQUIRED');
     assert.equal(db.state.calls.length, 0);
   }));
+});
+
+test('rechaza mensaje inválido antes de PostgreSQL y limpia la imagen recibida', async () => {
+  const db = makeClaimDb();
+  const uploadId = 'ae000000-0000-4000-8000-000000000002';
+  const filename = `${uploadId}.png`;
+  await assert.rejects(fs.access(resolvePrivateEvidencePath(filename)), { code: 'ENOENT' });
+  try {
+    await withFixedUuid(uploadId, () => withClaimContext({ db }, () => withServer(async url => {
+      const response = await fetch(`${url}/api/v1/reportes/91/reclamaciones`, {
+        method: 'POST',
+        headers: { Cookie: sessionCookie() },
+        body: claimForm({ message: 'corto' }),
+      });
+      const body = await response.json();
+      assert.equal(response.status, 400);
+      assert.equal(body.error.code, 'VALIDATION_ERROR');
+      assert.equal(db.state.calls.length, 0);
+      await assert.rejects(fs.access(resolvePrivateEvidencePath(filename)), { code: 'ENOENT' });
+    })));
+  } finally {
+    await deletePrivateEvidenceFile(filename);
+  }
+});
+
+test('reporte inexistente responde 404 y elimina la evidencia temporal', async () => {
+  const db = makeClaimDb({ missingReport: true });
+  const uploadId = 'ae000000-0000-4000-8000-000000000003';
+  const filename = `${uploadId}.png`;
+  await assert.rejects(fs.access(resolvePrivateEvidencePath(filename)), { code: 'ENOENT' });
+  try {
+    await withFixedUuid(uploadId, () => withClaimContext({ db }, () => withServer(async url => {
+      const response = await fetch(`${url}/api/v1/reportes/999/reclamaciones`, {
+        method: 'POST',
+        headers: { Cookie: sessionCookie() },
+        body: claimForm(),
+      });
+      assert.equal(response.status, 404);
+      assert.equal((await response.json()).error.code, 'REPORT_NOT_FOUND');
+      assert.equal(db.state.claim, null);
+      assert.equal(db.state.evidence, null);
+    })));
+    await assert.rejects(fs.access(resolvePrivateEvidencePath(filename)), { code: 'ENOENT' });
+  } finally {
+    await deletePrivateEvidenceFile(filename);
+  }
+});
+
+test('acepta otra persona cuando el reporte ya tiene reclamaciones pendientes', async () => {
+  const db = makeClaimDb({ report: { status: 'En reclamación' } });
+  const uploadId = 'ae000000-0000-4000-8000-000000000004';
+  const filename = `${uploadId}.png`;
+  try {
+    await withFixedUuid(uploadId, () => withClaimContext({ db, userId: '10' }, () => withServer(async url => {
+      const response = await fetch(`${url}/api/v1/reportes/91/reclamaciones`, {
+        method: 'POST',
+        headers: { Cookie: sessionCookie('10') },
+        body: claimForm(),
+      });
+      assert.equal(response.status, 201);
+      assert.equal(db.state.report.status, 'En reclamación');
+      assert.equal(db.state.claim.reclamanteId, '10');
+    })));
+  } finally {
+    await deletePrivateEvidenceFile(filename);
+  }
 });
 
 test('rechaza autor, reportes Perdido y Devuelto; revierte y limpia evidencia ante error SQL', async () => {
