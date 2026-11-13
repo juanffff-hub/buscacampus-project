@@ -2,10 +2,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   apiRequest,
   createReport,
+  createClaim,
+  decideClaim,
   deleteReport,
+  getClaim,
+  getClaimEvidence,
+  getMyClaims,
   getApiAssetUrl,
   getCategories,
   getLocations,
+  getReportClaims,
   getReports,
   updateReport,
 } from "./api.js";
@@ -131,5 +137,95 @@ describe("servicios de reportes", () => {
     expect(getApiAssetUrl("https://cdn.example.test/91.png")).toBe(
       "https://cdn.example.test/91.png",
     );
+  });
+});
+
+describe("servicios de reclamaciones", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("crea reclamaciones multipart y pagina el historial con cookies", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: async () => ({ success: true, data: { reclamacion: { id: "12" } } }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const formData = new FormData();
+    formData.set("mensajePrueba", "Puedo describir el objeto");
+    formData.set("archivo", new Blob(["evidence"], { type: "image/png" }), "evidence.png");
+
+    await createClaim("9/1", formData);
+    await getReportClaims("9/1", { page: 2, limit: 10 });
+    await getMyClaims({ page: 3, limit: 5 });
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      expect.stringMatching(/\/reportes\/9%2F1\/reclamaciones$/),
+      expect.stringMatching(/\/reportes\/9%2F1\/reclamaciones\?page=2&limit=10$/),
+      expect.stringMatching(/\/reclamaciones\/mias\?page=3&limit=5$/),
+    ]);
+    expect(fetchMock.mock.calls[0][1]).toEqual(
+      expect.objectContaining({ method: "POST", body: formData, credentials: "include" }),
+    );
+    expect(fetchMock.mock.calls[0][1].headers.has("Content-Type")).toBe(false);
+    for (const [, options] of fetchMock.mock.calls) {
+      expect(options.credentials).toBe("include");
+    }
+  });
+
+  it("consulta el detalle, decide una reclamaciÃ³n y descarga evidencia privada como Blob", async () => {
+    const evidence = new Blob(["private"], { type: "image/png" });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, data: { reclamacion: { id: "12" } } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, data: { reclamacion: { id: "12", estado: "Aprobada" } } }),
+      })
+      .mockResolvedValueOnce({ ok: true, status: 200, blob: async () => evidence });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getClaim("12")).resolves.toEqual({ reclamacion: { id: "12" } });
+    await expect(decideClaim("12", "Aprobada")).resolves.toEqual({
+      reclamacion: { id: "12", estado: "Aprobada" },
+    });
+    await expect(getClaimEvidence("12")).resolves.toBe(evidence);
+
+    expect(fetchMock.mock.calls[1]).toEqual([
+      expect.stringMatching(/\/reclamaciones\/12\/estado$/),
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ estado: "Aprobada" }),
+        credentials: "include",
+      }),
+    ]);
+    expect(fetchMock.mock.calls[2]).toEqual([
+      expect.stringMatching(/\/reclamaciones\/12\/evidencia$/),
+      expect.objectContaining({ credentials: "include" }),
+    ]);
+  });
+
+  it("normaliza errores JSON al solicitar evidencia privada", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 403,
+        json: async () => ({
+          success: false,
+          error: { code: "FORBIDDEN", message: "No tienes permiso.", details: [] },
+        }),
+      }),
+    );
+
+    await expect(getClaimEvidence("12")).rejects.toMatchObject({
+      status: 403,
+      code: "FORBIDDEN",
+      message: "No tienes permiso.",
+    });
   });
 });

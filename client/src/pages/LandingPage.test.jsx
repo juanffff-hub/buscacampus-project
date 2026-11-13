@@ -57,6 +57,8 @@ describe("LandingPage conectada con reportes", () => {
 
     expect(screen.getByRole("status")).toHaveTextContent("Cargando reportes");
     expect(await screen.findByRole("heading", { name: "Termo de acero" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ver detalle del reporte: Termo de acero" }))
+      .toHaveAttribute("href", "/reportes/91");
     expect(screen.getByAltText("Fotografía del reporte: Termo de acero")).toHaveAttribute(
       "src",
       "http://localhost:4000/uploads/91.png",

@@ -73,6 +73,12 @@ export default function Navbar() {
           {!isLoading &&
             (isAuthenticated ? (
               <>
+                <NavLink to="/reclamaciones/mias" onClick={closeMenu}>
+                  Mis reclamaciones
+                </NavLink>
+                <NavLink to="/reclamaciones/recibidas" onClick={closeMenu}>
+                  Reclamaciones recibidas
+                </NavLink>
                 <NavLink to="/dashboard" onClick={closeMenu}>
                   {user.nombreCompleto || user.correoElectronico}
                 </NavLink>
