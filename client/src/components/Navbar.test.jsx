@@ -50,6 +50,8 @@ describe("Navbar", () => {
       "href",
       "/register",
     );
+    expect(screen.queryByRole("link", { name: "Mis reclamaciones" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Reclamaciones recibidas" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cerrar sesión" })).not.toBeInTheDocument();
   });
 
@@ -64,6 +66,14 @@ describe("Navbar", () => {
     expect(
       await screen.findByRole("link", { name: "Ana Pérez" }),
     ).toHaveAttribute("href", "/dashboard");
+    expect(screen.getByRole("link", { name: "Mis reclamaciones" })).toHaveAttribute(
+      "href",
+      "/reclamaciones/mias",
+    );
+    expect(screen.getByRole("link", { name: "Reclamaciones recibidas" })).toHaveAttribute(
+      "href",
+      "/reclamaciones/recibidas",
+    );
     expect(screen.queryByRole("link", { name: "Iniciar sesión" })).not.toBeInTheDocument();
 
     const navigation = screen.getByRole("navigation", { name: "Navegación principal" });

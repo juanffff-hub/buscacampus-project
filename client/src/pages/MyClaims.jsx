@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getClaim, getClaimEvidence, getMyClaims } from "../services/api.js";
+import ClaimEvidence from "../components/ClaimEvidence.jsx";
+import { getClaim, getMyClaims } from "../services/api.js";
 
 const PAGE_SIZE = 10;
 
@@ -9,63 +10,6 @@ function formatDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Fecha no disponible";
   return new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeStyle: "short" }).format(date);
-}
-
-function EvidenceFile({ claimId, evidence }) {
-  const [isVisible, setIsVisible] = useState(false);
-  const [url, setUrl] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [retry, setRetry] = useState(0);
-
-  useEffect(() => {
-    if (!isVisible) return undefined;
-    let active = true;
-    let objectUrl = "";
-    setIsLoading(true);
-    setError(null);
-    getClaimEvidence(claimId)
-      .then((blob) => {
-        if (!active) return;
-        objectUrl = URL.createObjectURL(blob);
-        setUrl(objectUrl);
-      })
-      .catch((requestError) => {
-        if (active) setError(requestError);
-      })
-      .finally(() => {
-        if (active) setIsLoading(false);
-      });
-    return () => {
-      active = false;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [claimId, isVisible, retry]);
-
-  if (!evidence) return <p>Esta reclamación no tiene evidencia disponible.</p>;
-  if (!isVisible) {
-    return <button type="button" onClick={() => setIsVisible(true)}>Ver evidencia privada</button>;
-  }
-  if (isLoading) return <p role="status">Cargando evidencia privada…</p>;
-  if (error) {
-    return (
-      <div role="alert">
-        <p>{error.message}</p>
-        <button type="button" onClick={() => setRetry((value) => value + 1)}>Reintentar</button>
-      </div>
-    );
-  }
-  if (!url) return null;
-
-  return (
-    <figure className="claim-evidence-preview">
-      <img src={url} alt={`Evidencia privada: ${evidence.nombreOriginal}`} />
-      <figcaption>
-        <span>{evidence.nombreOriginal}</span>{" "}
-        <a href={url} download={evidence.nombreOriginal}>Descargar evidencia</a>
-      </figcaption>
-    </figure>
-  );
 }
 
 export default function MyClaims() {
@@ -189,7 +133,7 @@ export default function MyClaims() {
                         <>
                           <p><strong>Tu mensaje:</strong> {details.mensajePrueba}</p>
                           <p><strong>Autor del reporte:</strong> {details.reporte?.autor?.nombreCompleto}</p>
-                          <EvidenceFile claimId={claim.id} evidence={details.evidencia} />
+                          <ClaimEvidence claimId={claim.id} evidence={details.evidencia} />
                         </>
                       ) : null}
                     </div>
