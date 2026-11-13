@@ -103,6 +103,47 @@ describe("formulario de reclamación", () => {
     expect(createClaim).not.toHaveBeenCalled();
   });
 
+  it("valida el mínimo y el máximo del mensaje antes de enviar", async () => {
+    renderClaimForm();
+    await screen.findByRole("heading", { name: "Termo azul" });
+    const evidence = new File(["png bytes"], "evidencia.png", { type: "image/png" });
+    fireEvent.change(screen.getByLabelText("Imagen de evidencia"), {
+      target: { files: [evidence] },
+    });
+
+    fireEvent.change(screen.getByLabelText("Mensaje de prueba"), { target: { value: "corto" } });
+    fireEvent.submit(screen.getByRole("button", { name: "Enviar reclamación" }).closest("form"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("entre 10 y 2.000 caracteres");
+    expect(createClaim).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText("Mensaje de prueba"), {
+      target: { value: "x".repeat(2001) },
+    });
+    fireEvent.submit(screen.getByRole("button", { name: "Enviar reclamación" }).closest("form"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("entre 10 y 2.000 caracteres");
+    expect(createClaim).not.toHaveBeenCalled();
+  });
+
+  it("evita un segundo envío mientras la primera solicitud sigue pendiente", async () => {
+    let finishRequest;
+    createClaim.mockReturnValue(new Promise((resolve) => { finishRequest = resolve; }));
+    renderClaimForm();
+    await screen.findByRole("heading", { name: "Termo azul" });
+    fireEvent.change(screen.getByLabelText("Mensaje de prueba"), {
+      target: { value: "Tiene una marca pequeña en la tapa." },
+    });
+    fireEvent.change(screen.getByLabelText("Imagen de evidencia"), {
+      target: { files: [new File(["png bytes"], "evidencia.png", { type: "image/png" })] },
+    });
+    const form = screen.getByRole("button", { name: "Enviar reclamación" }).closest("form");
+    fireEvent.submit(form);
+    expect(await screen.findByRole("button", { name: "Enviando reclamación…" })).toBeDisabled();
+    fireEvent.submit(form);
+    expect(createClaim).toHaveBeenCalledTimes(1);
+    finishRequest({ reclamacion: { id: "12" } });
+    expect(await screen.findByTestId("destination")).toHaveTextContent("/reportes/91|");
+  });
+
   it("muestra errores del servidor y permite intentar de nuevo", async () => {
     createClaim.mockRejectedValueOnce(new Error("Ya reclamaste este reporte."));
     renderClaimForm();

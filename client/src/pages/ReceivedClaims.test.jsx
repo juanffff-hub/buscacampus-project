@@ -99,6 +99,18 @@ describe("bandeja de reclamaciones recibidas", () => {
     expect(screen.queryByRole("button", { name: "Aprobar devolución" })).not.toBeInTheDocument();
   });
 
+  it("envía el rechazo confirmado y conserva la tarjeta si la API informa un conflicto", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    decideClaim.mockRejectedValueOnce(new Error("La reclamación ya fue resuelta."));
+    renderReceivedClaims();
+    await screen.findByText("Reclamado por Luis Pérez");
+    fireEvent.click(screen.getByRole("button", { name: "Rechazar" }));
+
+    expect(decideClaim).toHaveBeenCalledWith("12", "Rechazada");
+    expect(await screen.findByRole("alert")).toHaveTextContent("La reclamación ya fue resuelta.");
+    expect(screen.getByText("Reclamado por Luis Pérez")).toBeInTheDocument();
+  });
+
   it("no permite decidir otra vez sin confirmación y reintenta una consulta fallida", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(false);
     getReports

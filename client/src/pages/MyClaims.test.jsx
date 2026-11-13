@@ -96,6 +96,16 @@ describe("historial de mis reclamaciones", () => {
     expect(getMyClaims).toHaveBeenLastCalledWith({ page: 2, limit: 10 });
   });
 
+  it("recupera el historial al cargar de nuevo la ruta", async () => {
+    const firstRender = renderMyClaims();
+    expect(await screen.findByRole("heading", { name: "Termo azul" })).toBeInTheDocument();
+    firstRender.unmount();
+
+    renderMyClaims();
+    expect(await screen.findByRole("heading", { name: "Termo azul" })).toBeInTheDocument();
+    expect(getMyClaims).toHaveBeenCalledTimes(2);
+  });
+
   it("permite reintentar y muestra el estado vacío", async () => {
     getMyClaims
       .mockRejectedValueOnce(new Error("Sin conexión"))
