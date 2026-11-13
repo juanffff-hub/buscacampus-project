@@ -13,10 +13,11 @@ export class ApiError extends Error {
 }
 
 export async function apiRequest(path, options = {}) {
-  const headers = new Headers(options.headers || {});
+  const { responseType = "json", ...requestOptions } = options;
+  const headers = new Headers(requestOptions.headers || {});
   const isFormData =
-    typeof FormData !== "undefined" && options.body instanceof FormData;
-  let body = options.body;
+    typeof FormData !== "undefined" && requestOptions.body instanceof FormData;
+  let body = requestOptions.body;
 
   if (body != null && !isFormData && typeof body !== "string") {
     headers.set("Content-Type", "application/json");
@@ -26,7 +27,7 @@ export async function apiRequest(path, options = {}) {
   let response;
   try {
     response = await fetch(`${API_URL}${path.startsWith("/") ? path : `/${path}`}`, {
-      ...options,
+      ...requestOptions,
       headers,
       body,
       credentials: "include",
@@ -38,6 +39,10 @@ export async function apiRequest(path, options = {}) {
   }
 
   if (response.status === 204) return null;
+
+  if (responseType === "blob" && response.ok) {
+    return response.blob();
+  }
 
   let payload;
   try {
@@ -132,6 +137,45 @@ export function updateReport(id, formData) {
 
 export function deleteReport(id) {
   return apiRequest(`/reportes/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+function withPagination(path, { page = 1, limit = 20 } = {}) {
+  const query = new URLSearchParams({ page: String(page), limit: String(limit) });
+  return `${path}?${query}`;
+}
+
+export function createClaim(reportId, formData) {
+  return apiRequest(`/reportes/${encodeURIComponent(reportId)}/reclamaciones`, {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export function getReportClaims(reportId, pagination) {
+  return apiRequest(
+    withPagination(`/reportes/${encodeURIComponent(reportId)}/reclamaciones`, pagination),
+  );
+}
+
+export function getMyClaims(pagination) {
+  return apiRequest(withPagination("/reclamaciones/mias", pagination));
+}
+
+export function getClaim(id) {
+  return apiRequest(`/reclamaciones/${encodeURIComponent(id)}`);
+}
+
+export function decideClaim(id, estado) {
+  return apiRequest(`/reclamaciones/${encodeURIComponent(id)}/estado`, {
+    method: "PATCH",
+    body: { estado },
+  });
+}
+
+export function getClaimEvidence(id) {
+  return apiRequest(`/reclamaciones/${encodeURIComponent(id)}/evidencia`, {
+    responseType: "blob",
+  });
 }
 
 export function getApiAssetUrl(path) {
