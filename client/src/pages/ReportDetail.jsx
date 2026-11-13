@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { getApiAssetUrl, getReport } from "../services/api.js";
+import { Link, useLocation, useParams } from "react-router-dom";
+import { useAuth } from "../context/AuthContext.jsx";
+import { getApiAssetUrl, getMyClaims, getReport } from "../services/api.js";
 
 function formatDate(value) {
   if (!value) return "Fecha no disponible";
@@ -14,10 +15,14 @@ function formatDate(value) {
 
 export default function ReportDetail() {
   const { id } = useParams();
+  const location = useLocation();
+  const { isAuthenticated, user } = useAuth();
   const [report, setReport] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [retry, setRetry] = useState(0);
+  const [claimCheck, setClaimCheck] = useState("idle");
+  const [claimRetry, setClaimRetry] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -38,6 +43,40 @@ export default function ReportDetail() {
       active = false;
     };
   }, [id, retry]);
+
+  useEffect(() => {
+    if (!report || !isAuthenticated || report.tipoReporte !== "Encontrado" ||
+      report.estado === "Devuelto" || String(user?.id) === String(report.autor?.id)) {
+      setClaimCheck("idle");
+      return undefined;
+    }
+
+    let active = true;
+    setClaimCheck("loading");
+    async function checkOwnClaims() {
+      try {
+        let page = 1;
+        let totalPages = 1;
+        let alreadyClaimed = false;
+        do {
+          const result = await getMyClaims({ page, limit: 100 });
+          alreadyClaimed = (result.items || []).some(
+            (claim) => String(claim.reporte?.id) === String(id),
+          );
+          totalPages = result.pagination?.totalPages || 1;
+          page += 1;
+        } while (!alreadyClaimed && page <= totalPages);
+
+        if (active) setClaimCheck(alreadyClaimed ? "exists" : "clear");
+      } catch {
+        if (active) setClaimCheck("error");
+      }
+    }
+    void checkOwnClaims();
+    return () => {
+      active = false;
+    };
+  }, [id, report, isAuthenticated, user?.id, claimRetry]);
 
   return (
     <section className="report-detail-section">
@@ -83,6 +122,11 @@ export default function ReportDetail() {
               <span className="section-kicker">DETALLE DEL REPORTE</span>
               <h1>{report.titulo}</h1>
               <p className="report-detail-description">{report.descripcion}</p>
+              {location.state?.claimNotice && (
+                <p className="report-detail-claim-notice" role="status">
+                  {location.state.claimNotice}
+                </p>
+              )}
               <dl className="report-detail-facts">
                 <div>
                   <dt>Categoría</dt>
@@ -101,6 +145,36 @@ export default function ReportDetail() {
                   <dd>{formatDate(report.fechaHoraEvento)}</dd>
                 </div>
               </dl>
+              {report.tipoReporte === "Encontrado" && report.estado !== "Devuelto" &&
+                (!isAuthenticated || String(user?.id) !== String(report.autor?.id)) && (
+                  <div className="report-detail-claim-action">
+                    {isAuthenticated && claimCheck === "loading" ? (
+                      <p role="status">Comprobando tus reclamaciones…</p>
+                    ) : isAuthenticated && claimCheck === "exists" ? (
+                      <p className="report-detail-claim-notice" role="status">
+                        Ya presentaste una reclamación para este reporte.
+                      </p>
+                    ) : isAuthenticated && claimCheck === "error" ? (
+                      <div role="alert">
+                        <p>No pudimos verificar si ya reclamaste este objeto.</p>
+                        <button type="button" onClick={() => setClaimRetry((value) => value + 1)}>
+                          Reintentar
+                        </button>
+                      </div>
+                    ) : (
+                      <Link
+                        className="button button-primary"
+                        to={isAuthenticated ? `/reportes/${encodeURIComponent(id)}/reclamar` : "/login"}
+                        state={isAuthenticated ? undefined : {
+                          from: { pathname: location.pathname },
+                          message: "Inicia sesión para reclamar este objeto encontrado.",
+                        }}
+                      >
+                        Reclamar este objeto
+                      </Link>
+                    )}
+                  </div>
+                )}
               <p className="report-detail-reference">Reporte #{report.id}</p>
             </div>
           </article>

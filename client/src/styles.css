@@ -1597,6 +1597,116 @@ p {
   color: #82928e;
   font-size: 11px;
 }
+.report-detail-claim-action {
+  margin-top: 26px;
+}
+.report-detail-claim-notice {
+  border: 1px solid #d7eadb;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #eef7e9;
+  color: #386d56;
+  font-size: 13px;
+}
+.claim-form-section {
+  padding: 48px 0 80px;
+  background: #f7f9f7;
+}
+.claim-form-container {
+  max-width: 900px;
+}
+.claim-form-card {
+  overflow: hidden;
+  border: 1px solid #e5ebe6;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 12px 34px rgba(13, 47, 43, 0.06);
+}
+.claim-form-report {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 22px 28px;
+  border-bottom: 1px solid #edf0eb;
+  background: #fbfcfb;
+}
+.claim-form-report img {
+  width: 92px;
+  height: 82px;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  object-fit: cover;
+}
+.claim-form-report h1 {
+  margin: 6px 0;
+  color: #173f42;
+  font-family: Outfit, sans-serif;
+  font-size: 26px;
+}
+.claim-form-report p {
+  margin: 0;
+  color: #6e8580;
+  font-size: 12px;
+}
+.claim-form {
+  display: grid;
+  gap: 10px;
+  padding: 28px;
+}
+.claim-form-help {
+  margin: 0 0 10px;
+  color: #657b78;
+  line-height: 1.65;
+}
+.claim-form > label {
+  margin-top: 7px;
+  color: #254c4d;
+  font-size: 13px;
+  font-weight: 800;
+}
+.claim-form textarea,
+.claim-form input[type="file"] {
+  width: 100%;
+  border: 1px solid #dce7e1;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+  color: #24484a;
+}
+.claim-form textarea {
+  resize: vertical;
+  line-height: 1.6;
+}
+.claim-form textarea:focus-visible,
+.claim-form input[type="file"]:focus-visible {
+  outline: 3px solid rgba(23, 139, 113, 0.22);
+  border-color: #178b71;
+}
+.claim-evidence-preview {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 4px 0;
+  color: #607974;
+  font-size: 12px;
+}
+.claim-evidence-preview img {
+  width: 96px;
+  height: 96px;
+  border-radius: 9px;
+  object-fit: cover;
+}
+.claim-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+.claim-form-actions button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
 @media (max-width: 760px) {
   .report-detail-section {
     padding: 32px 0 58px;
@@ -1612,5 +1722,29 @@ p {
   }
   .report-detail-content {
     padding: 26px 22px;
+  }
+  .claim-form-section {
+    padding: 32px 0 58px;
+  }
+  .claim-form-report {
+    align-items: flex-start;
+    padding: 18px;
+  }
+  .claim-form-report img {
+    width: 70px;
+    height: 70px;
+  }
+  .claim-form-report h1 {
+    font-size: 21px;
+  }
+  .claim-form {
+    padding: 20px 18px;
+  }
+  .claim-form-actions {
+    flex-direction: column-reverse;
+  }
+  .claim-form-actions .button {
+    width: 100%;
+    justify-content: center;
   }
 }

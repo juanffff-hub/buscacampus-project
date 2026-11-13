@@ -6,6 +6,7 @@ import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import ReportDetail from "./pages/ReportDetail.jsx";
+import ClaimForm from "./pages/ClaimForm.jsx";
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
 import PublicOnlyRoute from "./routes/PublicOnlyRoute.jsx";
 
@@ -17,6 +18,9 @@ export default function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/reportes/:id" element={<ReportDetail />} />
+          <Route element={<ProtectedRoute />}>
+            <Route path="/reportes/:id/reclamar" element={<ClaimForm />} />
+          </Route>
           <Route element={<PublicOnlyRoute />}>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
