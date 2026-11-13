@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 export default function ObjectCard({ item }) {
   const [imageError, setImageError] = useState(false);
@@ -6,7 +7,11 @@ export default function ObjectCard({ item }) {
   useEffect(() => setImageError(false), [item.imageUrl]);
 
   return (
-    <article className="object-card">
+    <Link
+      className="object-card"
+      to={`/reportes/${encodeURIComponent(item.id)}`}
+      aria-label={`Ver detalle del reporte: ${item.title}`}
+    >
       <div className="card-art">
         <span
           className={`status-pill ${item.type === "Encontrado" ? "status-found" : "status-lost"}`}
@@ -40,6 +45,6 @@ export default function ObjectCard({ item }) {
           Reporte #{item.id} <span aria-hidden="true">✳</span>
         </span>
       </div>
-    </article>
+    </Link>
   );
 }

@@ -67,6 +67,8 @@ describe("Dashboard de reportes propios", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Cargando tus reportes");
     expect(await screen.findByRole("heading", { name: "Mis reportes" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Llaves del laboratorio" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ver detalle del reporte: Llaves del laboratorio" }))
+      .toHaveAttribute("href", "/reportes/92");
     expect(screen.getByText("Publicado por ti")).toBeInTheDocument();
     expect(screen.getByAltText("Fotografía del reporte: Llaves del laboratorio")).toHaveAttribute(
       "src",
