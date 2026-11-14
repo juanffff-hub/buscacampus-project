@@ -112,10 +112,9 @@ test('GET /api/v1/reportes filtra, pagina e incluye autor, catálogos e imagen',
   let listSql;
   let listValues;
   pool.query = async (sql, values) => {
-    if (sql.includes('COUNT(*)::text AS total')) return { rows: [{ total: '1' }] };
     listSql = sql;
     listValues = values;
-    return { rows: [reportRow] };
+    return { rows: [{ ...reportRow, total: '1' }] };
   };
 
   try {
@@ -163,9 +162,9 @@ test('GET /api/v1/reportes filtra, pagina e incluye autor, catálogos e imagen',
 test('GET /api/v1/reportes valida filtros y nunca concatena valores enviados', async () => {
   const original = pool.query;
   let queryCount = 0;
-  pool.query = async () => {
+  pool.query = async sql => {
     queryCount += 1;
-    return { rows: [{ total: '0' }] };
+    return sql.includes('COUNT(*)::text AS total') ? { rows: [{ total: '0' }] } : { rows: [] };
   };
 
   try {

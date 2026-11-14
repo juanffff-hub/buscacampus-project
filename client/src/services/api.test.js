@@ -12,6 +12,7 @@ import {
   getCategories,
   getLocations,
   getReportClaims,
+  getReceivedClaims,
   getReports,
   updateReport,
 } from "./api.js";
@@ -157,11 +158,13 @@ describe("servicios de reclamaciones", () => {
     await createClaim("9/1", formData);
     await getReportClaims("9/1", { page: 2, limit: 10 });
     await getMyClaims({ page: 3, limit: 5 });
+    await getReceivedClaims({ page: 4, limit: 10 });
 
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       expect.stringMatching(/\/reportes\/9%2F1\/reclamaciones$/),
       expect.stringMatching(/\/reportes\/9%2F1\/reclamaciones\?page=2&limit=10$/),
       expect.stringMatching(/\/reclamaciones\/mias\?page=3&limit=5$/),
+      expect.stringMatching(/\/reclamaciones\/recibidas\?page=4&limit=10$/),
     ]);
     expect(fetchMock.mock.calls[0][1]).toEqual(
       expect.objectContaining({ method: "POST", body: formData, credentials: "include" }),

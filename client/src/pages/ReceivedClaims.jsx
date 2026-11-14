@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import ClaimEvidence from "../components/ClaimEvidence.jsx";
-import { decideClaim, getClaim, getReportClaims, getReports } from "../services/api.js";
+import { decideClaim, getClaim, getReceivedClaims } from "../services/api.js";
 
 const PAGE_SIZE = 10;
 
@@ -12,43 +12,10 @@ function formatDate(value) {
   return new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
-async function getAllMyFoundReports() {
-  const first = await getReports({ mios: true, page: 1, limit: 100 });
-  const reports = [...(first.items || [])];
-  const totalPages = first.pagination?.totalPages || 1;
-  for (let page = 2; page <= totalPages; page += 1) {
-    const result = await getReports({ mios: true, page, limit: 100 });
-    reports.push(...(result.items || []));
-  }
-  return reports.filter((report) => report.tipoReporte === "Encontrado");
-}
-
-async function getAllClaimsForReport(reportId) {
-  const first = await getReportClaims(reportId, { page: 1, limit: 100 });
-  const claims = [...(first.items || [])];
-  const totalPages = first.pagination?.totalPages || 1;
-  for (let page = 2; page <= totalPages; page += 1) {
-    const result = await getReportClaims(reportId, { page, limit: 100 });
-    claims.push(...(result.items || []));
-  }
-  return claims;
-}
-
-async function loadReceivedClaims() {
-  const reports = await getAllMyFoundReports();
-  const groups = await Promise.all(
-    reports.map(async (report) => ({
-      reportId: report.id,
-      claims: await getAllClaimsForReport(report.id),
-    })),
-  );
-  return groups.flatMap((group) => group.claims)
-    .sort((first, second) => new Date(second.fechaReclamacion) - new Date(first.fechaReclamacion));
-}
-
 export default function ReceivedClaims() {
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
   const [retry, setRetry] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -63,9 +30,12 @@ export default function ReceivedClaims() {
     let active = true;
     setIsLoading(true);
     setError(null);
-    loadReceivedClaims()
-      .then((claims) => {
-        if (active) setItems(claims);
+    getReceivedClaims({ page, limit: PAGE_SIZE })
+      .then((result) => {
+        if (active) {
+          setItems(result.items || []);
+          setTotalPages(result.pagination?.totalPages || 0);
+        }
       })
       .catch((requestError) => {
         if (active) setError(requestError);
@@ -76,7 +46,7 @@ export default function ReceivedClaims() {
     return () => {
       active = false;
     };
-  }, [retry]);
+  }, [retry, page]);
 
   async function loadDetails(claimId) {
     setExpandedId(claimId);
@@ -128,8 +98,7 @@ export default function ReceivedClaims() {
     }
   }
 
-  const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
-  const pageItems = items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pageCount = Math.max(1, totalPages);
 
   return (
     <section className="claims-section">
@@ -163,7 +132,7 @@ export default function ReceivedClaims() {
         ) : (
           <>
             <div className="claims-list" aria-live="polite">
-              {pageItems.map((claim) => (
+              {items.map((claim) => (
                 <article className="claim-history-card" key={claim.id}>
                   <div className="claim-history-main">
                     <div>
@@ -229,8 +198,8 @@ export default function ReceivedClaims() {
             </div>
             <div className="claims-pagination" aria-label="Paginación de reclamaciones recibidas">
               <button type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Anterior</button>
-              <span>Página {page} de {totalPages}</span>
-              <button type="button" disabled={page >= totalPages} onClick={() => setPage((value) => value + 1)}>Siguiente</button>
+              <span>Página {page} de {pageCount}</span>
+              <button type="button" disabled={page >= pageCount} onClick={() => setPage((value) => value + 1)}>Siguiente</button>
             </div>
           </>
         )}
