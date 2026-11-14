@@ -3,7 +3,9 @@ const multer = require('multer');
 const ApiError = require('../errors/ApiError');
 const fileStorage = require('../files/storage');
 
-const PRIVATE_UPLOADS_DIR = path.resolve(__dirname, '../../private_uploads');
+const PRIVATE_UPLOADS_DIR = path.resolve(
+  process.env.BUSCACAMPUS_PRIVATE_UPLOADS_DIR || path.resolve(__dirname, '../../private_uploads'),
+);
 const MAX_FILE_SIZE = fileStorage.MAX_IMAGE_SIZE;
 const MIME_TO_EXTENSION = fileStorage.MIME_TO_EXTENSION;
 const MIME_TO_SOURCE_EXTENSIONS = Object.freeze({
