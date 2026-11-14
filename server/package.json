@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "node --watch server.js",
     "start": "node server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "diagnose:files": "node scripts/diagnose-file-storage.js"
   },
   "engines": {
     "node": ">=18"
