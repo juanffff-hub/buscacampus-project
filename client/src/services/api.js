@@ -161,6 +161,10 @@ export function getMyClaims(pagination) {
   return apiRequest(withPagination("/reclamaciones/mias", pagination));
 }
 
+export function getReceivedClaims(pagination) {
+  return apiRequest(withPagination("/reclamaciones/recibidas", pagination));
+}
+
 export function getClaim(id) {
   return apiRequest(`/reclamaciones/${encodeURIComponent(id)}`);
 }

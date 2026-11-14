@@ -240,7 +240,8 @@ test('PUT /api/v1/reportes/:id actualiza y reemplaza metadata/archivo solo tras 
       assert.equal(body.data.report.titulo, 'Termo actualizado');
       assert.equal(body.data.report.estado, 'Publicado');
       assert.equal(body.data.report.imagen.nombreOriginal, 'nuevo.png');
-      assert.equal(body.data.report.imagen.nombreFisico, newName);
+      assert.equal(body.data.report.imagen.nombreFisico, undefined);
+      assert.ok(body.data.report.imagen.url.endsWith(newName));
       assert.deepEqual(db.state.metadata.map(file => file.filename), [newName]);
       assert.deepEqual(db.state.calls.map(call => call.statement.split(' ')[0]), [
         'BEGIN', 'SELECT', 'UPDATE', 'SELECT', 'DELETE', 'INSERT', 'SELECT', 'COMMIT',
@@ -301,7 +302,8 @@ test('PUT /api/v1/reportes/:id conserva la imagen cuando no se adjunta otra', as
 
       assert.equal(response.status, 200);
       assert.equal(body.data.report.titulo, 'Sin cambiar la foto');
-      assert.equal(body.data.report.imagen.nombreFisico, existingName);
+      assert.equal(body.data.report.imagen.nombreFisico, undefined);
+      assert.ok(body.data.report.imagen.url.endsWith(existingName));
       assert.deepEqual(db.state.metadata.map(file => file.filename), [existingName]);
       assert.equal(db.state.calls.some(call => call.statement.startsWith('DELETE FROM archivos_metadatos')), false);
       await fs.access(existingPath);

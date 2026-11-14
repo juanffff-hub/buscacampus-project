@@ -42,6 +42,11 @@ const REPORT_SELECT = `
     LIMIT 1
   ) file ON TRUE`;
 
+const REPORT_LIST_SELECT = REPORT_SELECT.replace(
+  '  SELECT\n    r.id::text AS id,',
+  '  SELECT COUNT(*) OVER()::text AS total,\n    r.id::text AS id,',
+);
+
 function buildFilters(filters, userId) {
   const values = [];
   const conditions = [];
@@ -51,12 +56,13 @@ function buildFilters(filters, userId) {
   };
 
   if (filters.q) {
-    values.push(`%${filters.q}%`);
+    const escapedQuery = filters.q.replace(/[\\%_]/g, character => `\\${character}`);
+    values.push(`%${escapedQuery}%`);
     const parameter = `$${values.length}`;
     conditions.push(
-      `(r.titulo ILIKE ${parameter} OR r.descripcion ILIKE ${parameter} OR ` +
-      `c.nombre ILIKE ${parameter} OR l.nombre_zona ILIKE ${parameter} OR ` +
-      `u.nombre_completo ILIKE ${parameter})`,
+      `(r.titulo ILIKE ${parameter} ESCAPE E'\\\\' OR r.descripcion ILIKE ${parameter} ESCAPE E'\\\\' OR ` +
+      `c.nombre ILIKE ${parameter} ESCAPE E'\\\\' OR l.nombre_zona ILIKE ${parameter} ESCAPE E'\\\\' OR ` +
+      `u.nombre_completo ILIKE ${parameter} ESCAPE E'\\\\')`,
     );
   }
   if (filters.categoriaId) add('r.categoria_id = ?', filters.categoriaId);
@@ -79,15 +85,6 @@ function buildFilters(filters, userId) {
 
 async function listReports(filters, userId) {
   const where = buildFilters(filters, userId);
-  const countResult = await pool.query(
-    `SELECT COUNT(*)::text AS total
-     FROM reportes_objetos r
-     JOIN usuarios u ON u.id = r.usuario_creador_id
-     JOIN categorias c ON c.id = r.categoria_id
-     JOIN ubicaciones l ON l.id = r.ubicacion_id${where.sql}`,
-    where.values,
-  );
-
   const limitParameter = where.values.length + 1;
   const offsetParameter = where.values.length + 2;
   const values = [
@@ -96,15 +93,27 @@ async function listReports(filters, userId) {
     (filters.page - 1) * filters.limit,
   ];
   const result = await pool.query(
-    `${REPORT_SELECT}${where.sql}
+    `${REPORT_LIST_SELECT}${where.sql}
      ORDER BY r.fecha_creacion DESC, r.id DESC
      LIMIT $${limitParameter} OFFSET $${offsetParameter}`,
     values,
   );
+  let total = Number(result.rows[0]?.total || 0);
+  if (result.rows.length === 0) {
+    const countResult = await pool.query(
+      `SELECT COUNT(*)::text AS total
+       FROM reportes_objetos r
+       JOIN usuarios u ON u.id = r.usuario_creador_id
+       JOIN categorias c ON c.id = r.categoria_id
+       JOIN ubicaciones l ON l.id = r.ubicacion_id${where.sql}`,
+      where.values,
+    );
+    total = Number(countResult.rows[0]?.total || 0);
+  }
 
   return {
     rows: result.rows,
-    total: Number(countResult.rows[0]?.total || 0),
+    total,
   };
 }
 

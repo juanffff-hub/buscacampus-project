@@ -46,6 +46,12 @@ async function listMine(req, res) {
   return sendSuccess(res, result);
 }
 
+async function listReceived(req, res) {
+  const pagination = listClaimsSchema.parse(req.query);
+  const result = await claimService.listReceivedClaims(req.user, pagination);
+  return sendSuccess(res, result);
+}
+
 async function getById(req, res) {
   const id = claimIdSchema.parse(req.params.id);
   const reclamacion = await claimService.getClaim(id, req.user);
@@ -86,4 +92,4 @@ async function updateStatus(req, res) {
   return sendSuccess(res, { reclamacion });
 }
 
-module.exports = { create, listByReport, listMine, getById, getEvidence, updateStatus };
+module.exports = { create, listByReport, listMine, listReceived, getById, getEvidence, updateStatus };

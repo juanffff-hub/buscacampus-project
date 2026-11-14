@@ -27,6 +27,11 @@ const CLAIM_SELECT = `
   JOIN usuarios owner ON owner.id = r.usuario_creador_id
   LEFT JOIN reclamaciones_archivos_metadatos evidence ON evidence.reclamacion_id = c.id`;
 
+const CLAIM_LIST_SELECT = CLAIM_SELECT.replace(
+  '  SELECT c.id::text AS id,',
+  '  SELECT COUNT(*) OVER()::text AS total,\n         c.id::text AS id,',
+);
+
 function validateClaimableReport(report, userId) {
   if (report.ownerId === String(userId)) {
     throw new ApiError(409, 'REPORT_OWNER_CANNOT_CLAIM', 'No puedes reclamar un reporte que publicaste.');
@@ -261,20 +266,25 @@ async function findReportOwner(reportId) {
 }
 
 async function listClaims({ where, values, page, limit }) {
-  const count = await pool.query(
-    `SELECT COUNT(*)::text AS total
-     FROM reclamaciones c${where}`,
-    values,
-  );
   const limitParameter = values.length + 1;
   const offsetParameter = values.length + 2;
   const result = await pool.query(
-    `${CLAIM_SELECT}${where}
+    `${CLAIM_LIST_SELECT}${where}
      ORDER BY c.fecha_reclamacion DESC, c.id DESC
      LIMIT $${limitParameter} OFFSET $${offsetParameter}`,
     [...values, limit, (page - 1) * limit],
   );
-  return { rows: result.rows, total: Number(count.rows[0]?.total || 0) };
+  let total = Number(result.rows[0]?.total || 0);
+  if (result.rows.length === 0) {
+    const count = await pool.query(
+      `SELECT COUNT(*)::text AS total
+       FROM reclamaciones c
+       JOIN reportes_objetos r ON r.id = c.reporte_id${where}`,
+      values,
+    );
+    total = Number(count.rows[0]?.total || 0);
+  }
+  return { rows: result.rows, total };
 }
 
 async function listClaimsForReport({ reportId, page, limit }) {
@@ -295,6 +305,15 @@ async function listClaimsForUser({ userId, page, limit }) {
   });
 }
 
+async function listReceivedClaims({ userId, isAdmin, page, limit }) {
+  return listClaims({
+    where: isAdmin ? '' : ' WHERE r.usuario_creador_id = $1',
+    values: isAdmin ? [] : [userId],
+    page,
+    limit,
+  });
+}
+
 module.exports = {
   createClaim,
   validateClaimableReport,
@@ -303,4 +322,5 @@ module.exports = {
   findReportOwner,
   listClaimsForReport,
   listClaimsForUser,
+  listReceivedClaims,
 };

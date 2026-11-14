@@ -9,7 +9,7 @@ const createClaimSchema = z.object({
 const claimIdSchema = z.string().regex(/^[1-9]\d*$/, 'El identificador no es válido.');
 
 const listClaimsSchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
+  page: z.coerce.number().int().min(1).max(1_000_000).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 }).strict();
 

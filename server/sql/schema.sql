@@ -86,10 +86,14 @@ CREATE TABLE IF NOT EXISTS reclamaciones_archivos_metadatos (
 );
 
 CREATE INDEX IF NOT EXISTS idx_reportes_fecha ON reportes_objetos (fecha_creacion DESC);
+CREATE INDEX IF NOT EXISTS idx_reportes_autor_fecha
+  ON reportes_objetos (usuario_creador_id, fecha_creacion DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_reportes_filtros ON reportes_objetos (categoria_id, ubicacion_id, tipo_reporte);
 CREATE INDEX IF NOT EXISTS idx_archivos_reporte ON archivos_metadatos (reporte_id);
 CREATE INDEX IF NOT EXISTS idx_archivos_autor ON archivos_metadatos (usuario_autor_id);
 CREATE INDEX IF NOT EXISTS idx_reclamaciones_reporte ON reclamaciones (reporte_id);
+CREATE INDEX IF NOT EXISTS idx_reclamaciones_reporte_fecha
+  ON reclamaciones (reporte_id, fecha_reclamacion DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_reclamaciones_usuario_fecha
   ON reclamaciones (usuario_reclamante_id, fecha_reclamacion DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_reclamaciones_evidencia_autor

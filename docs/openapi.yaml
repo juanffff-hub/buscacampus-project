@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: BuscaCampus API
-  version: 2.0.0
-  description: API REST del Avance 2 para autenticación, catálogos y reportes con archivos locales.
+  version: 3.0.0
+  description: API REST de BuscaCampus para autenticación, reportes, reclamaciones y evidencias privadas.
 servers:
   - url: http://localhost:4000/api/v1
     description: Desarrollo local
@@ -11,6 +11,7 @@ tags:
   - name: Autenticación
   - name: Catálogos
   - name: Reportes
+  - name: Reclamaciones
 paths:
   /health:
     get:
@@ -183,6 +184,7 @@ paths:
           schema:
             type: integer
             minimum: 1
+            maximum: 1000000
             default: 1
         - name: limit
           in: query
@@ -262,7 +264,7 @@ paths:
     put:
       tags: [Reportes]
       summary: Actualiza un reporte propio
-      description: Requiere sesión. Solo el autor o un administrador puede actualizarlo. La imagen es opcional; sin reemplazo se conserva la actual.
+      description: Requiere sesión. Solo el autor o un administrador puede actualizarlo; los estados del flujo se controlan mediante las decisiones de reclamación.
       security:
         - sessionCookie: []
       requestBody:
@@ -289,6 +291,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
         "500":
@@ -313,6 +317,244 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /reportes/{id}/reclamaciones:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: "^[1-9][0-9]*$"
+    get:
+      tags: [Reclamaciones]
+      summary: Lista reclamaciones recibidas por el autor del reporte
+      description: Requiere sesión y permiso de autor del reporte o administrador. La evidencia se representa mediante un endpoint privado.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Página de reclamaciones del reporte
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClaimListResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [Reclamaciones]
+      summary: Reclama un reporte encontrado con evidencia privada
+      description: Requiere sesión. El reclamante no puede ser el autor; se permite una reclamación por usuario y reporte. Crea la reclamación, sus metadatos y el estado En reclamación en una transacción.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ClaimCreateRequest"
+            encoding:
+              archivo:
+                contentType: image/jpeg, image/png, image/webp
+      responses:
+        "201":
+          description: Reclamación creada con estado Pendiente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClaimResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /reclamaciones/mias:
+    get:
+      tags: [Reclamaciones]
+      summary: Consulta el historial del usuario reclamante
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Página de reclamaciones propias
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClaimListResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /reclamaciones/recibidas:
+    get:
+      tags: [Reclamaciones]
+      summary: Consulta reclamaciones recibidas por el usuario autenticado
+      description: Devuelve solicitudes de reportes propios; un administrador puede consultar todas. La ruta agregada evita consultar cada reporte por separado.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Página de reclamaciones recibidas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClaimListResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /reclamaciones/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: "^[1-9][0-9]*$"
+    get:
+      tags: [Reclamaciones]
+      summary: Consulta una reclamación autorizada
+      description: Solo el reclamante, el autor del reporte o un administrador puede consultar el detalle.
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Detalle de la reclamación
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClaimResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /reclamaciones/{id}/estado:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: "^[1-9][0-9]*$"
+    patch:
+      tags: [Reclamaciones]
+      summary: Aprueba o rechaza una reclamación pendiente
+      description: Solo el autor del reporte o un administrador puede decidir. Aprobar devuelve el reporte y rechaza las demás reclamaciones pendientes en una transacción; rechazar publica el reporte si no quedan solicitudes activas.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClaimDecisionRequest"
+      responses:
+        "200":
+          description: Decisión aplicada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClaimResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /reclamaciones/{id}/evidencia:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: "^[1-9][0-9]*$"
+    get:
+      tags: [Reclamaciones]
+      summary: Obtiene evidencia privada autorizada
+      description: Solo el reclamante, el autor del reporte o un administrador puede obtener el archivo. La respuesta usa Cache-Control private, no-store y no se expone en /uploads.
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Imagen de evidencia
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              example: private, no-store
+            X-Content-Type-Options:
+              schema:
+                type: string
+              example: nosniff
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
 components:
   securitySchemes:
     sessionCookie:
@@ -320,6 +562,23 @@ components:
       in: cookie
       name: buscacampus_session
       description: Cookie HttpOnly creada por `POST /auth/login`.
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000000
+        default: 1
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
   schemas:
     Error:
       type: object
@@ -481,7 +740,6 @@ components:
         [
           id,
           nombreOriginal,
-          nombreFisico,
           url,
           mimeType,
           extension,
@@ -492,8 +750,6 @@ components:
         id:
           type: string
         nombreOriginal:
-          type: string
-        nombreFisico:
           type: string
         url:
           type: string
@@ -686,16 +942,137 @@ components:
         fechaHoraEvento:
           type: string
           format: date-time
-        estado:
-          type: string
-          enum: [Publicado, "En reclamación", Devuelto]
         archivo:
           type: string
           format: binary
           description: Imagen JPEG, PNG o WebP de máximo 5 MB; opcional al editar.
+    ClaimEvidenceMetadata:
+      type: object
+      required: [id, nombreOriginal, mimeType, extension, pesoBytes, fechaSubida, endpoint]
+      properties:
+        id:
+          type: string
+        nombreOriginal:
+          type: string
+        mimeType:
+          type: string
+          enum: [image/jpeg, image/png, image/webp]
+        extension:
+          type: string
+          enum: [.jpg, .png, .webp]
+        pesoBytes:
+          type: integer
+          minimum: 1
+          maximum: 5242880
+        fechaSubida:
+          type: string
+          format: date-time
+        endpoint:
+          type: string
+          format: uri-reference
+          description: Endpoint autenticado; no es una URL pública.
+    Claim:
+      type: object
+      required: [id, mensajePrueba, fechaReclamacion, estado, reclamante, reporte, evidencia]
+      properties:
+        id:
+          type: string
+        mensajePrueba:
+          type: string
+          minLength: 10
+          maxLength: 2000
+        fechaReclamacion:
+          type: string
+          format: date-time
+        estado:
+          type: string
+          enum: [Pendiente, Aprobada, Rechazada]
+        reclamante:
+          type: object
+          required: [id, nombreCompleto]
+          properties:
+            id:
+              type: string
+            nombreCompleto:
+              type: string
+        reporte:
+          type: object
+          required: [id, titulo, tipoReporte, estado, autor]
+          properties:
+            id:
+              type: string
+            titulo:
+              type: string
+            tipoReporte:
+              type: string
+              enum: [Encontrado]
+            estado:
+              type: string
+              enum: [Publicado, "En reclamación", Devuelto]
+            autor:
+              type: object
+              required: [id, nombreCompleto]
+              properties:
+                id:
+                  type: string
+                nombreCompleto:
+                  type: string
+        evidencia:
+          oneOf:
+            - $ref: "#/components/schemas/ClaimEvidenceMetadata"
+            - type: "null"
+    ClaimResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          const: true
+        data:
+          type: object
+          required: [reclamacion]
+          properties:
+            reclamacion:
+              $ref: "#/components/schemas/Claim"
+    ClaimListResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          const: true
+        data:
+          type: object
+          required: [items, pagination]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Claim"
+            pagination:
+              $ref: "#/components/schemas/Pagination"
+    ClaimCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [mensajePrueba, archivo]
+      properties:
+        mensajePrueba:
+          type: string
+          minLength: 10
+          maxLength: 2000
+        archivo:
+          type: string
+          format: binary
+          description: Imagen obligatoria JPEG, PNG o WebP de hasta 5 MB; la extensión y la firma deben corresponder al contenido.
+    ClaimDecisionRequest:
+      type: object
+      additionalProperties: false
+      required: [estado]
+      properties:
+        estado:
+          type: string
+          enum: [Aprobada, Rechazada]
   responses:
     ValidationError:
-      description: Datos inválidos o archivo ausente/tipo no admitido
+      description: Datos inválidos, archivo ausente, extensión no admitida o contenido que no coincide con el MIME.
       content:
         application/json:
           schema:
@@ -707,19 +1084,19 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
     Forbidden:
-      description: El usuario autenticado no puede modificar este reporte
+      description: El usuario autenticado no está autorizado para consultar o modificar este recurso.
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
     NotFound:
-      description: El reporte no existe
+      description: El reporte, la reclamación o la evidencia no existen.
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
     Conflict:
-      description: Correo duplicado o dependencias impiden eliminar el reporte
+      description: Correo o reclamación duplicados, transición inválida o reporte con reclamaciones.
       content:
         application/json:
           schema:

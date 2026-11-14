@@ -46,8 +46,8 @@ test('almacena JPEG, PNG y WebP con UUID, extensión MIME y acceso estático /up
   const images = [
     {
       mime: 'image/jpeg',
-      original: 'C:\\fakepath\\foto-original.png',
-      sanitizedOriginal: 'foto-original.png',
+      original: 'C:\\fakepath\\foto-original.jpg',
+      sanitizedOriginal: 'foto-original.jpg',
       bytes: Buffer.from([0xff, 0xd8, 0xff, 0x10, 0x20]),
     },
     {
@@ -112,6 +112,14 @@ test('rechaza MIME no permitido y contenido cuya firma no coincide', async () =>
       const unsupportedBody = await unsupportedResponse.json();
       assert.equal(unsupportedResponse.status, 400);
       assert.equal(unsupportedBody.error.code, 'UNSUPPORTED_FILE_TYPE');
+
+      const mismatchedExtensionResponse = await fetch(`${url}/upload`, {
+        method: 'POST',
+        body: multipartFile(Buffer.from([0xff, 0xd8, 0xff]), 'image/jpeg', 'foto.png'),
+      });
+      const mismatchedExtensionBody = await mismatchedExtensionResponse.json();
+      assert.equal(mismatchedExtensionResponse.status, 400);
+      assert.equal(mismatchedExtensionBody.error.code, 'UNSUPPORTED_FILE_EXTENSION');
 
       const invalidContentResponse = await fetch(`${url}/upload`, {
         method: 'POST',

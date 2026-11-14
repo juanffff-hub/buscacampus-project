@@ -112,10 +112,9 @@ test('GET /api/v1/reportes filtra, pagina e incluye autor, catálogos e imagen',
   let listSql;
   let listValues;
   pool.query = async (sql, values) => {
-    if (sql.includes('COUNT(*)::text AS total')) return { rows: [{ total: '1' }] };
     listSql = sql;
     listValues = values;
-    return { rows: [reportRow] };
+    return { rows: [{ ...reportRow, total: '1' }] };
   };
 
   try {
@@ -146,7 +145,6 @@ test('GET /api/v1/reportes filtra, pagina e incluye autor, catálogos e imagen',
         imagen: {
           id: '101',
           nombreOriginal: 'termo.webp',
-          nombreFisico: 'cda48ef7-79ef-4ba0-8d67-b1140da251c2.webp',
           url: '/uploads/cda48ef7-79ef-4ba0-8d67-b1140da251c2.webp',
           mimeType: 'image/webp',
           extension: '.webp',
@@ -163,9 +161,9 @@ test('GET /api/v1/reportes filtra, pagina e incluye autor, catálogos e imagen',
 test('GET /api/v1/reportes valida filtros y nunca concatena valores enviados', async () => {
   const original = pool.query;
   let queryCount = 0;
-  pool.query = async () => {
+  pool.query = async sql => {
     queryCount += 1;
-    return { rows: [{ total: '0' }] };
+    return sql.includes('COUNT(*)::text AS total') ? { rows: [{ total: '0' }] } : { rows: [] };
   };
 
   try {
@@ -176,9 +174,36 @@ test('GET /api/v1/reportes valida filtros y nunca concatena valores enviados', a
       assert.equal(invalidBody.error.code, 'VALIDATION_ERROR');
       assert.equal(queryCount, 0);
 
+      const excessivePage = await fetch(`${url}/api/v1/reportes?page=1000001`);
+      assert.equal(excessivePage.status, 400);
+      assert.equal(queryCount, 0);
+
       const validResponse = await fetch(`${url}/api/v1/reportes?q=%27%20OR%201%3D1`);
       assert.equal(validResponse.status, 200);
       assert.equal(queryCount, 2);
+    });
+  } finally {
+    pool.query = original;
+  }
+});
+
+test('GET /api/v1/reportes trata comodines de búsqueda como texto literal', async () => {
+  const original = pool.query;
+  let searchSql;
+  let searchValues;
+  pool.query = async (sql, values = []) => {
+    if (sql.includes('COUNT(*)::text AS total')) return { rows: [{ total: '0' }] };
+    searchSql = sql;
+    searchValues = values;
+    return { rows: [] };
+  };
+
+  try {
+    await withServer(async url => {
+      const response = await fetch(`${url}/api/v1/reportes?q=%25_`);
+      assert.equal(response.status, 200);
+      assert.deepEqual(searchValues, ['%\\%\\_%', 20, 0]);
+      assert.ok(searchSql.includes("ESCAPE E'\\\\'"));
     });
   } finally {
     pool.query = original;

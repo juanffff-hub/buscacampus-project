@@ -106,6 +106,15 @@ async function listMyClaims(userId, { page, limit }) {
   return formatClaimList(await claimRepository.listClaimsForUser({ userId, page, limit }), page, limit);
 }
 
+async function listReceivedClaims(actor, { page, limit }) {
+  return formatClaimList(await claimRepository.listReceivedClaims({
+    userId: actor.id,
+    isAdmin: actor.rol === 'Administrador',
+    page,
+    limit,
+  }), page, limit);
+}
+
 async function getClaim(id, actor) {
   const row = await claimRepository.findClaimById(id);
   if (!row) throw new ApiError(404, 'CLAIM_NOT_FOUND', 'La reclamación solicitada no existe.');
@@ -137,6 +146,7 @@ module.exports = {
   toPublicClaim,
   listClaimsForReport,
   listMyClaims,
+  listReceivedClaims,
   getClaim,
   getClaimEvidence,
   decideClaim,

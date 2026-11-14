@@ -6,19 +6,16 @@ import {
   decideClaim,
   getClaim,
   getClaimEvidence,
-  getReportClaims,
-  getReports,
+  getReceivedClaims,
 } from "../services/api.js";
 
 vi.mock("../services/api.js", () => ({
   decideClaim: vi.fn(),
   getClaim: vi.fn(),
   getClaimEvidence: vi.fn(),
-  getReportClaims: vi.fn(),
-  getReports: vi.fn(),
+  getReceivedClaims: vi.fn(),
 }));
 
-const report = { id: "91", tipoReporte: "Encontrado" };
 const claim = {
   id: "12",
   estado: "Pendiente",
@@ -37,8 +34,7 @@ function renderReceivedClaims() {
 
 describe("bandeja de reclamaciones recibidas", () => {
   beforeEach(() => {
-    getReports.mockResolvedValue({ items: [report], pagination: { totalPages: 1 } });
-    getReportClaims.mockResolvedValue({ items: [claim], pagination: { totalPages: 1 } });
+    getReceivedClaims.mockResolvedValue({ items: [claim], pagination: { page: 1, totalPages: 1 } });
     getClaim.mockResolvedValue({
       reclamacion: {
         ...claim,
@@ -68,8 +64,7 @@ describe("bandeja de reclamaciones recibidas", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Cargando reclamaciones recibidas");
     expect(await screen.findByRole("heading", { name: "Reclamaciones recibidas" })).toBeInTheDocument();
     expect(await screen.findByText("Reclamado por Luis Pérez")).toBeInTheDocument();
-    expect(getReports).toHaveBeenCalledWith({ mios: true, page: 1, limit: 100 });
-    expect(getReportClaims).toHaveBeenCalledWith("91", { page: 1, limit: 100 });
+    expect(getReceivedClaims).toHaveBeenCalledWith({ page: 1, limit: 10 });
 
     fireEvent.click(screen.getByRole("button", { name: "Ver mensaje y evidencia" }));
     expect(await screen.findByText("Tiene una marca pequeña en la tapa.")).toBeInTheDocument();
@@ -81,11 +76,11 @@ describe("bandeja de reclamaciones recibidas", () => {
 
   it("confirma la aprobación y actualiza la solicitud tras la decisión", async () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    getReportClaims
-      .mockResolvedValueOnce({ items: [claim], pagination: { totalPages: 1 } })
+    getReceivedClaims
+      .mockResolvedValueOnce({ items: [claim], pagination: { page: 1, totalPages: 1 } })
       .mockResolvedValueOnce({
         items: [{ ...claim, estado: "Aprobada", reporte: { ...claim.reporte, estado: "Devuelto" } }],
-        pagination: { totalPages: 1 },
+        pagination: { page: 1, totalPages: 1 },
       });
     renderReceivedClaims();
     await screen.findByText("Reclamado por Luis Pérez");
@@ -94,7 +89,7 @@ describe("bandeja de reclamaciones recibidas", () => {
     expect(confirmSpy).toHaveBeenCalledOnce();
     expect(decideClaim).toHaveBeenCalledWith("12", "Aprobada");
     expect(await screen.findByRole("status")).toHaveTextContent("Reclamación aprobada y reporte actualizado");
-    await waitFor(() => expect(getReportClaims).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(getReceivedClaims).toHaveBeenCalledTimes(2));
     expect(await screen.findByText("Aprobada")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Aprobar devolución" })).not.toBeInTheDocument();
   });
@@ -113,16 +108,16 @@ describe("bandeja de reclamaciones recibidas", () => {
 
   it("no permite decidir otra vez sin confirmación y reintenta una consulta fallida", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(false);
-    getReports
+    getReceivedClaims
       .mockRejectedValueOnce(new Error("Sin conexión"))
-      .mockResolvedValueOnce({ items: [], pagination: { totalPages: 1 } });
+      .mockResolvedValueOnce({ items: [], pagination: { page: 1, totalPages: 0 } });
     renderReceivedClaims();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("No pudimos cargar las reclamaciones recibidas");
     fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
     expect(await screen.findByRole("heading", { name: "No tienes reclamaciones pendientes ni historial recibido" }))
       .toBeInTheDocument();
-    expect(getReportClaims).not.toHaveBeenCalled();
+    expect(getReceivedClaims).toHaveBeenCalledTimes(2);
     expect(decideClaim).not.toHaveBeenCalled();
   });
 });

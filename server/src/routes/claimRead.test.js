@@ -85,9 +85,8 @@ test('lista paginada por reporte solo para autor y expone datos sin ruta física
       if (statement.startsWith('SELECT id::text AS id, usuario_creador_id')) {
         return { rows: [{ id: '91', ownerId: '7' }] };
       }
-      if (statement.startsWith('SELECT COUNT(*)::text AS total')) return { rows: [{ total: '21' }] };
       if (statement.includes('FROM reclamaciones c') && statement.includes('LIMIT $2 OFFSET $3')) {
-        return { rows: [claimRow] };
+        return { rows: [{ ...claimRow, total: '21' }] };
       }
       throw new Error(`Unexpected read query: ${statement}`);
     },
@@ -163,6 +162,45 @@ test('GET reclamaciones del reporte devuelve 403 a terceros y 404 si el reporte 
     });
     assert.equal(missing.status, 404);
     assert.equal(countQueries, 0);
+  }));
+});
+
+test('GET /api/v1/reclamaciones/recibidas filtra por autor y pagina en una consulta', async () => {
+  const queries = [];
+  await withQueryContext({
+    query: async (sql, values = []) => {
+      queries.push({ sql: sql.trim().replace(/\s+/g, ' '), values });
+      if (sql.includes('FROM reclamaciones c') && sql.includes('LIMIT')) {
+        return { rows: [{ ...claimRow, total: '21' }] };
+      }
+      throw new Error(`Unexpected received claims query: ${sql}`);
+    },
+  }, async () => withServer(async url => {
+    const unauthenticated = await fetch(`${url}/api/v1/reclamaciones/recibidas`);
+    assert.equal(unauthenticated.status, 401);
+    assert.equal(queries.length, 0);
+
+    const invalid = await fetch(`${url}/api/v1/reclamaciones/recibidas?page=0`, {
+      headers: { Cookie: sessionCookie('7') },
+    });
+    assert.equal(invalid.status, 400);
+    assert.equal(queries.length, 0);
+
+    const excessivePage = await fetch(`${url}/api/v1/reclamaciones/recibidas?page=1000001`, {
+      headers: { Cookie: sessionCookie('7') },
+    });
+    assert.equal(excessivePage.status, 400);
+    assert.equal(queries.length, 0);
+
+    const response = await fetch(`${url}/api/v1/reclamaciones/recibidas?page=2&limit=10`, {
+      headers: { Cookie: sessionCookie('7') },
+    });
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.deepEqual(body.data.pagination, { page: 2, limit: 10, total: 21, totalPages: 3 });
+    assert.match(queries[0].sql, /r\.usuario_creador_id = \$1/);
+    assert.deepEqual(queries[0].values, ['7', 10, 10]);
+    assert.equal(queries.length, 1);
   }));
 });
 
