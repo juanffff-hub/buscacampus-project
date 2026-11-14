@@ -9,7 +9,7 @@ const listReportsSchema = z.object({
   tipoReporte: z.enum(['Perdido', 'Encontrado']).optional(),
   estado: z.enum(['Publicado', 'En reclamación', 'Devuelto']).optional(),
   mios: z.enum(['true', 'false']).default('false').transform(value => value === 'true'),
-  page: z.coerce.number().int().min(1).default(1),
+  page: z.coerce.number().int().min(1).max(1_000_000).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 }).strict();
 

@@ -30,7 +30,6 @@ function toPublicReport(row) {
     imagen: row.imagenId ? {
       id: row.imagenId,
       nombreOriginal: row.imagenNombreOriginal,
-      nombreFisico: row.imagenNombreFisico,
       url: row.imagenUrl,
       mimeType: row.imagenMimeType,
       extension: row.imagenExtension,

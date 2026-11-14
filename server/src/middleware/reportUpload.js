@@ -6,6 +6,11 @@ const fileStorage = require('../files/storage');
 const UPLOADS_DIR = path.resolve(__dirname, '../../uploads');
 const MAX_FILE_SIZE = fileStorage.MAX_IMAGE_SIZE;
 const MIME_TO_EXTENSION = fileStorage.MIME_TO_EXTENSION;
+const MIME_TO_SOURCE_EXTENSIONS = Object.freeze({
+  'image/jpeg': ['.jpg', '.jpeg'],
+  'image/png': ['.png'],
+  'image/webp': ['.webp'],
+});
 
 const storage = fileStorage.createUuidDiskStorage(UPLOADS_DIR);
 const multerUpload = multer({
@@ -24,6 +29,14 @@ const multerUpload = multer({
         400,
         'UNSUPPORTED_FILE_TYPE',
         'El archivo debe ser una imagen JPEG, PNG o WebP.',
+      ));
+    }
+    const sourceExtension = path.extname(file.originalname || '').toLowerCase();
+    if (!MIME_TO_SOURCE_EXTENSIONS[file.mimetype].includes(sourceExtension)) {
+      return callback(new ApiError(
+        400,
+        'UNSUPPORTED_FILE_EXTENSION',
+        'La extensión del archivo debe coincidir con su tipo de imagen.',
       ));
     }
     return callback(null, true);

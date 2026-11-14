@@ -186,6 +186,12 @@ test('GET /api/v1/reclamaciones/recibidas filtra por autor y pagina en una consu
     assert.equal(invalid.status, 400);
     assert.equal(queries.length, 0);
 
+    const excessivePage = await fetch(`${url}/api/v1/reclamaciones/recibidas?page=1000001`, {
+      headers: { Cookie: sessionCookie('7') },
+    });
+    assert.equal(excessivePage.status, 400);
+    assert.equal(queries.length, 0);
+
     const response = await fetch(`${url}/api/v1/reclamaciones/recibidas?page=2&limit=10`, {
       headers: { Cookie: sessionCookie('7') },
     });

@@ -56,12 +56,13 @@ function buildFilters(filters, userId) {
   };
 
   if (filters.q) {
-    values.push(`%${filters.q}%`);
+    const escapedQuery = filters.q.replace(/[\\%_]/g, character => `\\${character}`);
+    values.push(`%${escapedQuery}%`);
     const parameter = `$${values.length}`;
     conditions.push(
-      `(r.titulo ILIKE ${parameter} OR r.descripcion ILIKE ${parameter} OR ` +
-      `c.nombre ILIKE ${parameter} OR l.nombre_zona ILIKE ${parameter} OR ` +
-      `u.nombre_completo ILIKE ${parameter})`,
+      `(r.titulo ILIKE ${parameter} ESCAPE E'\\\\' OR r.descripcion ILIKE ${parameter} ESCAPE E'\\\\' OR ` +
+      `c.nombre ILIKE ${parameter} ESCAPE E'\\\\' OR l.nombre_zona ILIKE ${parameter} ESCAPE E'\\\\' OR ` +
+      `u.nombre_completo ILIKE ${parameter} ESCAPE E'\\\\')`,
     );
   }
   if (filters.categoriaId) add('r.categoria_id = ?', filters.categoriaId);
