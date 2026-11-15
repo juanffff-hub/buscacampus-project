@@ -64,7 +64,7 @@ test("dos usuarios publican, reclaman, deciden y consultan evidencia privada tra
     expect(reportId).toBeTruthy();
 
     await author.getByRole("button", { name: "Cerrar sesión" }).click();
-    await expect(author).toHaveURL(/\/$/);
+    await expect(author).toHaveURL(/\/login$/);
 
     await createAccount(claimant, "Reclamante de prueba", claimantEmail);
     await signIn(claimant, claimantEmail);
@@ -94,7 +94,9 @@ test("dos usuarios publican, reclaman, deciden y consultan evidencia privada tra
     const createdClaim = await creationResponse.json();
     const claimId = createdClaim.data.reclamacion.id;
     await expect(visitor).toHaveURL(new RegExp(`/reportes/${reportId}$`));
-    await expect(visitor.getByRole("status")).toContainText("Reclamación enviada");
+    await expect(
+      visitor.getByRole("status").filter({ hasText: "Reclamación enviada" }),
+    ).toBeVisible();
     await expect(visitor.getByText("En reclamación")).toBeVisible();
     const unauthorizedEvidence = await anonymousContext.request.get(
       `http://localhost:4000/api/v1/reclamaciones/${claimId}/evidencia`,
