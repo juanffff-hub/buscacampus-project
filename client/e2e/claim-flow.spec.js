@@ -74,6 +74,8 @@ test("dos usuarios publican, reclaman, deciden y consultan evidencia privada tra
     await visitor.getByLabel("Correo institucional").fill(claimantEmail);
     await visitor.getByLabel("Contraseña", { exact: true }).fill(PASSWORD);
     await visitor.getByRole("button", { name: "Ingresar" }).click();
+    await expect(visitor).toHaveURL(new RegExp(`/reportes/${reportId}$`));
+    await visitor.getByRole("link", { name: "Reclamar este objeto" }).click();
     await expect(visitor).toHaveURL(new RegExp(`/reportes/${reportId}/reclamar$`));
 
     await visitor.getByLabel("Mensaje de prueba").fill("Puedo identificar una marca exclusiva en el objeto que encontré.");
