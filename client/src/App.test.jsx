@@ -17,9 +17,9 @@ vi.mock("./pages/ClaimForm.jsx", () => ({ default: () => <p>Formulario de reclam
 vi.mock("./pages/MyClaims.jsx", () => ({ default: () => <p>Historial privado</p> }));
 vi.mock("./pages/ReceivedClaims.jsx", () => ({ default: () => <p>Bandeja privada</p> }));
 
-function renderApp(path) {
+function renderApp(path, state) {
   return render(
-    <MemoryRouter initialEntries={[path]}>
+    <MemoryRouter initialEntries={[state ? { pathname: path, state } : path]}>
       <App />
     </MemoryRouter>,
   );
@@ -49,5 +49,12 @@ describe("rutas del flujo de reclamaciones", () => {
     useAuthMock.mockReturnValue({ isAuthenticated: false, isLoading: false });
     renderApp("/reportes/91");
     expect(await screen.findByText("Detalle público")).toBeInTheDocument();
+  });
+
+  it("al restaurar una sesión desde login vuelve a la reclamación solicitada", async () => {
+    useAuthMock.mockReturnValue({ isAuthenticated: true, isLoading: false });
+    renderApp("/login", { from: { pathname: "/reportes/91/reclamar" } });
+
+    expect(await screen.findByText("Formulario de reclamación privado")).toBeInTheDocument();
   });
 });

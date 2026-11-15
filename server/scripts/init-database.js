@@ -2,6 +2,8 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { Client } = require('pg');
 
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+
 const SQL_DIR = path.resolve(__dirname, '../sql');
 
 async function initializeDatabase() {
