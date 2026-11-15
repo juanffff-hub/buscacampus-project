@@ -112,7 +112,9 @@ test("dos usuarios publican, reclaman, deciden y consultan evidencia privada tra
     await expect(author.getByAltText("Evidencia privada: evidencia.png")).toBeVisible();
     author.once("dialog", dialog => dialog.accept());
     await author.getByRole("button", { name: "Aprobar devolución" }).click();
-    await expect(author.getByRole("status")).toContainText("Reclamación aprobada");
+    await expect(
+      author.getByRole("status").filter({ hasText: "Reclamación aprobada" }),
+    ).toBeVisible();
 
     await visitor.goto(reportPath);
     await expect(visitor.getByText("Devuelto")).toBeVisible();
