@@ -8,6 +8,7 @@
     "dev": "node --watch server.js",
     "start": "node server.js",
     "test": "node --test",
+    "db:init": "node scripts/init-database.js",
     "diagnose:files": "node scripts/diagnose-file-storage.js"
   },
   "engines": {

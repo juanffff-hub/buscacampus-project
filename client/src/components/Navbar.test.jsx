@@ -60,7 +60,9 @@ describe("Navbar", () => {
     getCurrentUserMock.mockResolvedValue({
       user: { id: 2, nombreCompleto: "Ana Pérez", correoElectronico: "ana@uao.edu.co" },
     });
-    logoutMock.mockResolvedValue(null);
+    logoutMock.mockImplementation(async beforeSessionClear => {
+      beforeSessionClear?.();
+    });
     renderNavbar();
 
     expect(

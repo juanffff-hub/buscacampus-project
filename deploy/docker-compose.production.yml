@@ -1,0 +1,74 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      DATABASE_URL: "${DATABASE_URL:?Set DATABASE_URL for production PostgreSQL}"
+      CLIENT_ORIGIN: "${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN to the HTTPS site origin}"
+      JWT_SECRET: "${JWT_SECRET:?Set JWT_SECRET outside Git}"
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      COOKIE_SECURE: "true"
+      PGSSL: ${PGSSL:-true}
+      BUSCACAMPUS_UPLOADS_DIR: /var/lib/buscacampus/uploads
+      BUSCACAMPUS_PRIVATE_UPLOADS_DIR: /var/lib/buscacampus/private_uploads
+    volumes:
+      - "${REPORT_UPLOADS_PATH:?Set persistent report upload path}:/var/lib/buscacampus/uploads"
+      - "${CLAIM_EVIDENCE_PATH:?Set persistent private evidence path}:/var/lib/buscacampus/private_uploads"
+    expose:
+      - "4000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    restart: unless-stopped
+
+  client:
+    build:
+      context: ..
+      dockerfile: client/Dockerfile
+      args:
+        VITE_API_URL: /api/v1
+    expose:
+      - "8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+    restart: unless-stopped
+
+  https:
+    image: caddy:2-alpine
+    environment:
+      PUBLIC_DOMAIN: "${PUBLIC_DOMAIN:?Set a DNS name that points to this host}"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      client:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  caddy-data:
+  caddy-config:

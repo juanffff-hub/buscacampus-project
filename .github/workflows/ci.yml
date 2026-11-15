@@ -1,0 +1,72 @@
+name: Verify BuscaCampus
+
+on:
+  push:
+    branches: [main, "*-avance3"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: buscacampus_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d buscacampus_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/buscacampus_test
+      AVANCE3_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/buscacampus_test
+      JWT_SECRET: ci-only-secret-with-at-least-32-random-looking-characters
+      JWT_EXPIRES_IN: 20m
+      COOKIE_SECURE: "false"
+      POSTGRES_PASSWORD: ci-only-password
+      PUBLIC_DOMAIN: buscacampus.example.edu
+      PUBLIC_ORIGIN: https://buscacampus.example.edu
+      REPORT_UPLOADS_PATH: /tmp/buscacampus-uploads
+      CLAIM_EVIDENCE_PATH: /tmp/buscacampus-private_uploads
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            client/package-lock.json
+            server/package-lock.json
+      - name: Install server dependencies
+        run: npm ci --prefix server
+      - name: Install client dependencies
+        run: npm ci --prefix client
+      - name: Initialize isolated PostgreSQL test database
+        run: npm run db:init --prefix server
+      - name: Test server with PostgreSQL integration
+        run: npm test --prefix server
+      - name: Test React client
+        run: npm test --prefix client -- --pool=threads --maxWorkers=1 --reporter=dot
+      - name: Build React client
+        run: npm run build --prefix client
+      - name: Install Chromium for Playwright
+        working-directory: client
+        run: npx playwright install --with-deps chromium
+      - name: Run two-user browser flow
+        run: npm run test:e2e --prefix client
+      - name: Validate local container configuration
+        run: docker compose --env-file deploy/.env.example -f deploy/docker-compose.yml config --quiet
+      - name: Validate production HTTPS configuration
+        run: docker compose --env-file deploy/.env.production.example -f deploy/docker-compose.production.yml config --quiet
+      - name: Build API and client images
+        run: docker compose --env-file deploy/.env.example -f deploy/docker-compose.yml build

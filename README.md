@@ -1,154 +1,215 @@
-# BuscaCampus — Avance 2
+# BuscaCampus — Entrega Final (Avance 3)
 
-BuscaCampus permite consultar y gestionar reportes de objetos perdidos y encontrados en la Universidad Autónoma de Occidente. Esta guía explica cómo preparar el proyecto, iniciar la aplicación y usar sus funciones. No hace falta conocer el proyecto de antemano.
+BuscaCampus es una aplicación web para reportar objetos perdidos y encontrados en la Universidad Autónoma de Occidente. Permite publicar reportes con imágenes, presentar reclamaciones con evidencia privada, revisar solicitudes y consultar el historial después de volver a iniciar sesión.
 
-## Funcionalidades
+La aplicación usa React y Vite, Express y PostgreSQL. Las sesiones se guardan en cookies HttpOnly; las imágenes y evidencias se guardan como archivos con metadatos en PostgreSQL.
 
-- Registro con correo institucional `@uao.edu.co`, contraseña almacenada con `bcryptjs` y login mediante cookie HttpOnly.
-- Restauración de sesión, logout, rutas públicas y dashboard protegido.
-- Catálogos reales de categorías y ubicaciones, búsqueda y filtros de reportes.
-- Ubicaciones UAO: Aula 1–4, Sotanos 1–2, Cafeteria Piso 1–3 y Biblioteca Piso 1–3.
-- Dashboard para consultar, publicar, editar y eliminar reportes propios.
-- Subida multipart de una imagen JPEG, PNG o WebP de hasta 5 MB por reporte.
-- Persistencia dual: archivo físico en `server/uploads/` y metadatos relacionados en PostgreSQL.
-- Estados de carga, error, reintento y contenido vacío en las vistas que consultan la API.
+## Funciones
 
-Las reclamaciones, la administración completa, el chat, las notificaciones y el almacenamiento cloud están fuera del alcance de este avance.
+- Registro e inicio de sesión con correo institucional @uao.edu.co, restauración de sesión y cierre de sesión.
+- Landing pública, detalle de reportes y panel privado.
+- Creación, edición y eliminación de reportes propios.
+- Reclamaciones de objetos encontrados con mensaje y evidencia JPEG, PNG o WebP de hasta 5 MB.
+- Evidencia privada visible para quien reclama, quien publicó el reporte y la administración.
+- Aprobación y rechazo con actualización transaccional del estado y conservación del historial.
+- Búsqueda, filtros, paginación y estados de carga, error, reintento y contenido vacío.
+- Persistencia dual: archivos físicos más metadatos relacionados en PostgreSQL.
 
 ## Requisitos
 
+Para el arranque recomendado:
+
+- Docker Desktop o Docker Engine con Docker Compose v2.
+- Un mínimo de 2 GB de memoria disponible para las imágenes.
+
+Para ejecutar cada proyecto directamente en el equipo:
+
 - Node.js 20.19 o posterior y npm.
 - PostgreSQL 14 o posterior.
-- `psql` para aplicar los scripts por terminal, o pgAdmin 4 para ejecutarlos desde Query Tool.
 
-El cliente y el servidor son proyectos npm independientes. `server/package.json` declara Node 18 o posterior; Vite requiere Node 20.19 o posterior para ejecutar el cliente.
+## Arranque local con Docker Compose
 
-## Puesta en marcha
+1. Copia la plantilla de variables y cambia las contraseñas locales:
 
-### 1. Crear y preparar la base de datos
+   ~~~powershell
+   Copy-Item deploy/.env.example deploy/.env
+   ~~~
 
-Crea una base de datos llamada `buscacampus` desde pgAdmin o con `createdb -U postgres buscacampus`. Después, abre una terminal en la raíz del repositorio y ejecuta el esquema y los datos iniciales. Si tu usuario de PostgreSQL no es `postgres`, reemplázalo en los comandos:
+   Edita deploy/.env. Usa una contraseña local propia con letras, números, guion o guion bajo para que pueda formar la URL PostgreSQL; genera un JWT_SECRET aleatorio de al menos 32 bytes. La plantilla solo sirve para desarrollo local.
 
-```bash
-psql -U postgres -h localhost -p 5432 -d buscacampus -f server/sql/schema.sql
-psql -U postgres -h localhost -p 5432 -d buscacampus -f server/sql/seed.sql
-```
+2. Desde la raíz del repositorio, construye e inicia la aplicación:
 
-Si ya tienes una base de Avance 1, conserva sus datos y aplica las dos migraciones en orden:
+   ~~~powershell
+   docker compose --env-file deploy/.env -f deploy/docker-compose.yml up --build -d
+   ~~~
 
-```bash
-psql -U postgres -h localhost -p 5432 -d buscacampus -f server/sql/migrations/20261020_001_avance2_archivos_mime.sql
-psql -U postgres -h localhost -p 5432 -d buscacampus -f server/sql/migrations/20261022_001_ubicaciones_uao.sql
-```
+3. Abre http://localhost:8080. El estado de la API y de PostgreSQL está en http://localhost:8080/api/v1/health.
 
-La primera migración añade el tipo MIME y los índices de archivos. La segunda agrega las ubicaciones oficiales de la UAO y desactiva las anteriores sin borrar las que estén asociadas a reportes. Para una base nueva, `schema.sql` y `seed.sql` ya preparan el esquema y el catálogo actual. Las migraciones se pueden volver a ejecutar. Consulta el [diagrama del modelo relacional](docs/mer.md) para conocer las relaciones entre las tablas.
+El contenedor API espera a PostgreSQL, aplica el esquema actual, las migraciones idempotentes y el seed, y luego inicia Express. El inicio no borra reportes ni usuarios. Compose mantiene PostgreSQL, imágenes de reportes y evidencias privadas en volúmenes independientes. La interfaz y la API comparten origen; Nginx envía las solicitudes de API y de imágenes al servidor.
 
-Si usas pgAdmin, abre `buscacampus`, selecciona **Tools → Query Tool**, carga cada archivo indicado y ejecútalo. Para actualizar una base existente, aplica las migraciones antes de iniciar el servidor.
+Para revisar el estado o apagar servicios:
 
-### 2. Configurar variables de entorno
+~~~powershell
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml ps
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml logs -f api
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml down
+~~~
 
-Copia los archivos de ejemplo para crear la configuración local:
+No añadas -v al comando down si quieres conservar la base y los archivos. La opción -v elimina los volúmenes persistentes.
 
-```bash
-cp server/.env.example server/.env
-cp client/.env.example client/.env
-```
+### Usar la aplicación
 
-En Windows PowerShell, usa `Copy-Item server/.env.example server/.env` y `Copy-Item client/.env.example client/.env`.
+1. Crea dos cuentas de prueba con correos @uao.edu.co distintos. Usa datos sintéticos, no información personal real.
+2. Con la primera cuenta, abre Mis reportes y publica un objeto de tipo Encontrado con imagen.
+3. Cierra sesión. Con la segunda cuenta, abre el detalle público del reporte y selecciona Reclamar este objeto.
+4. Escribe un mensaje de prueba y adjunta una imagen de evidencia.
+5. Vuelve a iniciar sesión con la primera cuenta. En Reclamaciones recibidas abre la solicitud, revisa su evidencia y apruébala o recházala.
+6. Revisa el estado final del reporte y el historial en Mis reclamaciones.
 
-Abre `server/.env` y ajusta `DATABASE_URL` para que coincida con tu usuario, contraseña, host, puerto y nombre de base de datos de PostgreSQL. Sustituye el valor de ejemplo de `JWT_SECRET` por una clave aleatoria. Puedes generarla con `openssl rand -base64 48` o con `node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"`. En desarrollo local con HTTP, deja `COOKIE_SECURE=false`; actívalo solo cuando el servidor use HTTPS. En `client/.env`, conserva `VITE_API_URL=http://localhost:4000/api/v1` para esta configuración local.
+## Ejecución directa sin Docker
 
-| Variable del servidor | Propósito                     | Valor de desarrollo del ejemplo                           |
-| --------------------- | ----------------------------- | --------------------------------------------------------- |
-| `PORT`                | Puerto HTTP de Express        | `4000`                                                    |
-| `DATABASE_URL`        | Cadena de conexión PostgreSQL | `postgres://postgres:postgres@localhost:5432/buscacampus` |
-| `CLIENT_ORIGIN`       | Origen permitido por CORS     | `http://localhost:5173`                                   |
-| `PGSSL`               | Activa TLS para PostgreSQL    | `false`                                                   |
-| `JWT_SECRET`          | Clave de firma de sesión      | Reemplazar por un secreto propio                          |
-| `JWT_EXPIRES_IN`      | Vigencia del JWT              | `8h`                                                      |
-| `COOKIE_SECURE`       | Marca Secure de la cookie     | `false` en HTTP local                                     |
+1. Crea una base PostgreSQL vacía y copia los archivos de entorno:
 
-Los archivos `.env` contienen configuración local y no se suben a Git. No compartas la clave JWT ni uses el valor de ejemplo en un entorno compartido.
+   ~~~powershell
+   Copy-Item server/.env.example server/.env
+   Copy-Item client/.env.example client/.env
+   ~~~
 
-### 3. Instalar dependencias e iniciar los proyectos
+2. Edita server/.env. Ajusta DATABASE_URL, genera JWT_SECRET y deja COOKIE_SECURE=false para HTTP local. En client/.env conserva VITE_API_URL=http://localhost:4000/api/v1.
+3. Instala dependencias e inicializa esquema, migraciones y datos de catálogo:
 
-Instala las dependencias desde la raíz del repositorio:
+   ~~~powershell
+   npm ci --prefix server
+   npm ci --prefix client
+   npm run db:init --prefix server
+   ~~~
 
-```bash
-npm install --prefix server
-npm install --prefix client
-```
+4. Inicia la API y el cliente en dos terminales distintas:
 
-Abre dos terminales en la raíz del repositorio. En la primera, inicia la API:
+   ~~~powershell
+   npm run dev --prefix server
+   npm run dev --prefix client
+   ~~~
 
-```bash
-npm run dev --prefix server
-```
+Abre la dirección que informa Vite, normalmente http://localhost:5173. El puerto 4000 es la API; su ruta raíz no muestra una página web.
 
-En la segunda, inicia el cliente:
+## Base existente de Avance 2
 
-```bash
-npm run dev --prefix client
-```
+Haz primero un respaldo de PostgreSQL y de las carpetas de archivos. Detén la API durante la actualización. Configura server/.env para apuntar a la misma base de Avance 2 y ejecuta:
 
-Abre la dirección que Vite muestra, normalmente `http://localhost:5173`. El puerto `4000` es la API; su ruta raíz no es una página web. Para comprobar el servidor y PostgreSQL, visita `http://localhost:4000/api/v1/health`; la respuesta debe indicar `success: true` y `data.database.connected: true`. El cliente y `CLIENT_ORIGIN` deben usar los orígenes indicados en los archivos `.env`.
+~~~powershell
+npm run db:init --prefix server
+~~~
 
-### 4. Usar la aplicación
+El inicializador carga server/.env, aplica schema.sql, todas las migraciones SQL en orden y seed.sql. Las instrucciones usan CREATE ... IF NOT EXISTS, ALTER ... IF NOT EXISTS, índices repetibles y datos con ON CONFLICT. No eliminan registros existentes. Las migraciones amplían metadatos, catálogos de ubicación, evidencias e índices.
 
-1. En la página principal, busca reportes por texto o filtra por categoría y ubicación. Selecciona **Todas las ubicaciones** o **Todas** para quitar esos filtros.
-2. Para publicar un objeto, selecciona **Reportar un objeto** y crea una cuenta con correo `@uao.edu.co` y contraseña de al menos ocho caracteres. Luego inicia sesión.
-3. En el panel **Mis reportes**, selecciona **Publicar reporte**. Completa los campos y adjunta una imagen JPEG, PNG o WebP de hasta 5 MB.
-4. Usa **Editar** para corregir un reporte propio y **Eliminar** para borrarlo. La eliminación solicita confirmación.
-5. Cierra sesión desde la navegación cuando termines.
+Si administras PostgreSQL desde pgAdmin, también puedes aplicar manualmente, en orden, los archivos de server/sql/migrations. No ejecutes pruebas de integración contra una base con datos reales: requieren una base aislada cuyo nombre termine en _test o -test.
 
-## API REST
+El Compose local inicia una base nueva en un volumen propio. Para conservar datos de otra instalación en Compose, restaura primero el respaldo en la base vacía que usarás; luego inicia la API para que aplique los cambios idempotentes.
 
-La especificación completa está en [`docs/openapi.yaml`](docs/openapi.yaml). Todas las rutas API usan el prefijo `/api/v1`. Las respuestas exitosas usan `{ "success": true, "data": ... }`; los errores usan `{ "success": false, "error": { "code", "message", "details" } }`.
+## Variables de entorno
 
-| Método   | Ruta             | Acceso                | Descripción                                           |
-| -------- | ---------------- | --------------------- | ----------------------------------------------------- |
-| `GET`    | `/health`        | Público               | Estado de la API y conexión PostgreSQL                |
-| `POST`   | `/auth/registro` | Público               | Crear cuenta institucional; responde `201`            |
-| `POST`   | `/auth/login`    | Público               | Iniciar sesión y establecer cookie                    |
-| `GET`    | `/auth/me`       | Sesión                | Restaurar la sesión actual                            |
-| `POST`   | `/auth/logout`   | Público               | Eliminar la cookie; responde `204`                    |
-| `GET`    | `/categorias`    | Público               | Listar categorías                                     |
-| `GET`    | `/ubicaciones`   | Público               | Listar ubicaciones activas                            |
-| `GET`    | `/reportes`      | Público*              | Listar, buscar y filtrar reportes                     |
-| `GET`    | `/reportes/:id`  | Público               | Consultar un reporte                                  |
-| `POST`   | `/reportes`      | Sesión                | Crear reporte multipart; responde `201`               |
-| `PUT`    | `/reportes/:id`  | Autor o administrador | Actualizar campos y, opcionalmente, reemplazar imagen |
-| `DELETE` | `/reportes/:id`  | Autor o administrador | Eliminar reporte y archivo; responde `204`            |
+| Variable | Uso |
+| --- | --- |
+| DATABASE_URL | Conexión PostgreSQL del servidor. |
+| JWT_SECRET | Secreto de firma; usa uno distinto por ambiente y no lo subas a Git. |
+| JWT_EXPIRES_IN | Vigencia de la sesión; por ejemplo, 8h. |
+| COOKIE_SECURE | true con HTTPS; false solo en HTTP local. |
+| CLIENT_ORIGIN | Origen permitido para CORS. |
+| PGSSL | Activa conexión TLS a PostgreSQL administrado. |
+| BUSCACAMPUS_UPLOADS_DIR | Carpeta de imágenes públicas de reportes. |
+| BUSCACAMPUS_PRIVATE_UPLOADS_DIR | Carpeta privada de evidencias de reclamaciones. |
+| VITE_API_URL | URL base de la API para Vite; usa /api/v1 detrás del proxy del mismo origen. |
 
-`GET /reportes` acepta `q`, `categoriaId`, `ubicacionId`, `tipoReporte`, `estado`, `mios`, `page` y `limit`. `mios=true` requiere sesión. La paginación usa por defecto `page=1` y `limit=20`, con máximo de 100 resultados por página. `tipoReporte` admite `Perdido` o `Encontrado`; `estado` admite `Publicado`, `En reclamación` o `Devuelto`.
+No guardes secretos en client/.env: las variables VITE_* se incluyen en el código que descarga el navegador. Los archivos server/.env, client/.env y deploy/.env son locales y están excluidos de Git.
 
-El registro requiere `nombreCompleto` (3–160 caracteres), `correoElectronico` institucional y `contrasena` (al menos 8 caracteres). El correo se normaliza a minúsculas. El login establece la cookie `buscacampus_session` como HttpOnly y SameSite=Lax; Secure depende de `COOKIE_SECURE`. El JWT viaja únicamente en esa cookie: no se devuelve en el cuerpo ni se guarda en `localStorage` o `sessionStorage`.
+## API y modelo de datos
 
-Crear reporte requiere los campos `titulo`, `descripcion`, `categoriaId`, `ubicacionId`, `tipoReporte`, `fechaHoraEvento` y un archivo `archivo`. El archivo es obligatorio al crear y opcional al editar. Solo se aceptan JPEG, PNG y WebP de hasta 5 MB. El cliente envía FormData; no debe fijar manualmente el encabezado multipart `Content-Type`.
+La especificación de rutas, payloads, permisos, límites y códigos HTTP está en [OpenAPI](docs/openapi.yaml). El diagrama del modelo relacional está en [MER](docs/mer.md), y los cambios del Avance 3 están descritos en [trazabilidad técnica](docs/avance3-api-trazabilidad.md).
 
-Los códigos de error relevantes son `400` validación, `401` sesión ausente o credenciales inválidas, `403` permiso insuficiente, `404` recurso inexistente, `409` correo duplicado o dependencia que impide borrar, `413` archivo demasiado grande y `500` error inesperado. Las respuestas no exponen hashes, tokens, secretos, rutas físicas ni trazas.
+Rutas principales:
 
-## Archivos y persistencia dual
+- Autenticación: /api/v1/auth/registro, /login, /me y /logout.
+- Catálogos y reportes: /api/v1/categorias, /ubicaciones y /reportes.
+- Reclamaciones: /api/v1/reportes/:id/reclamaciones, /api/v1/reclamaciones/mias, /recibidas, /:id, /:id/estado y /:id/evidencia.
 
-Cada archivo se guarda en `server/uploads/` con un nombre generado por UUID. PostgreSQL conserva en `archivos_metadatos` el autor, reporte, nombre original, nombre físico, URL pública, MIME, extensión, peso y fecha de subida. La creación del reporte y sus metadatos se confirma en una transacción; si falla, el archivo cargado se elimina. Los archivos se sirven desde `/uploads/<nombre-uuid>` y no se guardan en Base64.
-
-Al reemplazar una imagen o eliminar un reporte, la API sincroniza la metadata y el archivo físico. La carpeta y sus archivos están excluidos de Git, salvo `server/uploads/.gitkeep`.
+La evidencia de reclamación no se sirve desde /uploads. El endpoint de evidencia requiere sesión y permiso; las imágenes normales de reportes se sirven desde /uploads.
 
 ## Pruebas y build
 
-```bash
-npm test --prefix server
-npm test --prefix client -- --pool=threads --maxWorkers=1 --reporter=dot
-npm run build --prefix client
-```
+~~~powershell
+npm.cmd test --prefix server
+npm.cmd test --prefix client -- --pool=threads --maxWorkers=1 --reporter=dot
+npm.cmd run build --prefix client
+~~~
 
-El límite de workers del comando cliente hace la suite más estable en equipos Windows. `dist/` es un artefacto local y está excluido de Git.
+La suite del servidor ejecuta las pruebas de PostgreSQL si se define AVANCE3_TEST_DATABASE_URL con una base de pruebas aislada terminada en _test o -test. El flujo E2E requiere Chromium y esa misma clase de base:
 
-## Demo
+~~~powershell
+$env:AVANCE3_TEST_DATABASE_URL = "postgres://postgres:postgres@localhost:5432/buscacampus_test"
+npm.cmd run test:e2e --prefix client
+Remove-Item Env:AVANCE3_TEST_DATABASE_URL
+~~~
 
-Consulta la [guía paso a paso de la demo](docs/demo-avance2.md). Los videos están disponibles por capítulo en [`Demo Web Avance 2`](Demo%20Web%20Avance%202/):
+Playwright comprueba el recorrido con dos usuarios. Su proceso de inicio aplica esquema, migraciones y seed a esa base de prueba y guarda archivos en carpetas temporales que elimina al terminar. No apuntes AVANCE3_TEST_DATABASE_URL a una base de desarrollo o producción.
 
-- [Parte 1 — Registro, login y sesión restaurable](Demo%20Web%20Avance%202/Demo%20Parte%201.%20Registro,%20login%20y%20sesi%C3%B3n%20restaurable.mp4)
-- [Parte 2 — Landing con datos reales y filtros](Demo%20Web%20Avance%202/Demo%20Parte%202.%20Landing%20con%20datos%20reales%20y%20filtros.mp4)
-- [Parte 3 — Crear un reporte con imagen](Demo%20Web%20Avance%202/Demo%20Parte%203.%20Crear%20un%20reporte%20con%20imagen.mp4)
-- [Parte 4 — Editar y eliminar](Demo%20Web%20Avance%202/Demo%20Parte%204.%20Editar%20y%20eliminar.mp4)
+GitHub Actions ejecuta pruebas del servidor con PostgreSQL, pruebas del cliente, build, E2E con Chromium, validación de Compose y construcción de imágenes en cada push de rama Avance 3 y pull request a main.
+
+## Archivos y persistencia dual
+
+- Imágenes públicas de reportes: server/uploads en ejecución directa; volumen report-uploads en Compose.
+- Evidencia privada de reclamaciones: server/private_uploads en ejecución directa; volumen claim-evidence en Compose.
+- Metadatos en PostgreSQL: archivos_metadatos y reclamaciones_archivos_metadatos.
+
+El servidor genera nombres UUID, verifica MIME y firma del contenido, limita el tamaño a 5 MB y limpia archivos provisionales si falla la transacción. La API no devuelve rutas físicas. Para revisar discrepancias en modo de solo lectura:
+
+~~~powershell
+npm run diagnose:files --prefix server
+~~~
+
+## Publicación HTTPS
+
+Hay una configuración base con Caddy en deploy/docker-compose.production.yml. Caddy obtiene certificados TLS cuando PUBLIC_DOMAIN apunta a la máquina y los puertos 80 y 443 son accesibles. La API exige una base PostgreSQL externa. Las imágenes y evidencias usan rutas persistentes del host.
+
+1. Copia deploy/.env.production.example a deploy/.env.production y reemplaza el dominio, origen HTTPS, URL PostgreSQL, JWT_SECRET y rutas persistentes.
+2. Asegura que las carpetas persistentes existan y que el usuario de contenedor con UID 1000 pueda escribir en ellas.
+3. Configura DNS hacia el host y permite entrada a 80/443.
+4. Inicia la publicación:
+
+   ~~~bash
+   docker compose --env-file deploy/.env.production -f deploy/docker-compose.production.yml up --build -d
+   ~~~
+
+5. Comprueba /api/v1/health y recorre el registro, publicación, reclamación, decisión, evidencia e historial desde el dominio HTTPS.
+
+La plantilla no es una URL activa. La publicación requiere un host autorizado, un nombre DNS y acceso a PostgreSQL persistente. No marques la entrega como publicada hasta probar el flujo completo desde el dominio.
+
+## Respaldo y restauración
+
+Detén la API antes de tomar el respaldo para que PostgreSQL y los archivos queden sincronizados. Conserva fuera del repositorio:
+
+1. Un respaldo PostgreSQL en formato custom con pg_dump.
+2. Una copia de las carpetas públicas y privadas de archivos; en producción son REPORT_UPLOADS_PATH y CLAIM_EVIDENCE_PATH.
+3. La versión de código y las migraciones usadas.
+
+Ejemplo con credenciales exportadas en Bash:
+
+~~~bash
+pg_dump --dbname "$DATABASE_URL" --format=custom --file=buscacampus.backup
+pg_restore --dbname "$RESTORE_DATABASE_URL" --no-owner --no-privileges buscacampus.backup
+~~~
+
+Restaura en una base vacía y restaura las dos carpetas de archivos desde el mismo respaldo. Después inicia la API, que volverá a aplicar los cambios idempotentes. Ejecuta el diagnóstico de archivos y comprueba las rutas de imágenes antes de habilitar tráfico.
+
+## Solución de problemas
+
+- La portada no carga: abre el cliente en 8080 con Compose o la dirección de Vite en ejecución directa.
+- PostgreSQL no está listo: revisa docker compose ps y los logs del servicio db; confirma que el puerto no esté ocupado y DATABASE_URL sea correcto.
+- No inicia sesión tras desplegar: confirma HTTPS, COOKIE_SECURE=true, PUBLIC_ORIGIN y JWT_SECRET. No cambies a localStorage para resolver cookies.
+- No carga una imagen: confirma que el volumen público está montado y que el archivo existe. /uploads publica únicamente imágenes de reportes.
+- No se ve la evidencia: abre el detalle autorizado de la reclamación; la descarga requiere sesión y no funciona como una URL pública.
+- E2E no inicia: comprueba Chromium, PostgreSQL y que AVANCE3_TEST_DATABASE_URL termine en _test o -test.
+
+## Sustentación
+
+Consulta [Guion de sustentación del Avance 3](docs/sustentacion-avance3.md). Incluye un recorrido de menos de 10 minutos, consultas SQL de solo lectura, archivos por verificar, reparto entre los cuatro integrantes, ventajas y costos de las decisiones y tomas sugeridas para un video opcional.

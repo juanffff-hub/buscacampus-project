@@ -18,14 +18,16 @@ function toEvidenceMetadata(uploadedFile) {
   };
 }
 
-async function createClaim({ reportId, userId, message, uploadedFile }) {
+async function createClaim({ reportId, userId, claimant, message, uploadedFile }) {
   try {
-    return await claimRepository.createClaim({
+    const row = await claimRepository.createClaim({
       reportId,
       userId,
+      claimant,
       message,
       evidence: toEvidenceMetadata(uploadedFile),
     });
+    return toPublicClaim(row);
   } catch (error) {
     try {
       await deletePrivateEvidenceFile(uploadedFile.filename);

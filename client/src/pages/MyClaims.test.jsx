@@ -89,7 +89,7 @@ describe("historial de mis reclamaciones", () => {
       });
     renderMyClaims();
     await screen.findByRole("heading", { name: "Termo azul" });
-    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ir a la página siguiente" }));
 
     expect(await screen.findByRole("heading", { name: "Llaves" })).toBeInTheDocument();
     expect(screen.getByText("Página 2 de 2")).toBeInTheDocument();
@@ -104,6 +104,25 @@ describe("historial de mis reclamaciones", () => {
     renderMyClaims();
     expect(await screen.findByRole("heading", { name: "Termo azul" })).toBeInTheDocument();
     expect(getMyClaims).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignora un detalle privado que termina después de cerrarlo y volverlo a abrir", async () => {
+    let resolveFirst;
+    let resolveSecond;
+    getClaim
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve; }));
+    renderMyClaims();
+    await screen.findByRole("heading", { name: "Termo azul" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Ver detalle y evidencia" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Ocultar detalle" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ver detalle y evidencia" }));
+
+    resolveSecond({ reclamacion: { ...claimDetail, mensajePrueba: "Detalle actual" } });
+    expect(await screen.findByText("Detalle actual")).toBeInTheDocument();
+    resolveFirst({ reclamacion: { ...claimDetail, mensajePrueba: "Detalle anterior" } });
+    await waitFor(() => expect(screen.queryByText("Detalle anterior")).not.toBeInTheDocument());
   });
 
   it("permite reintentar y muestra el estado vacío", async () => {

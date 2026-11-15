@@ -1,0 +1,75 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-buscacampus}
+      POSTGRES_USER: ${POSTGRES_USER:-buscacampus}
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the compose env file}"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      DATABASE_URL: postgres://${POSTGRES_USER:-buscacampus}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-buscacampus}
+      CLIENT_ORIGIN: http://localhost:${APP_PORT:-8080}
+      JWT_SECRET: "${JWT_SECRET:?Set JWT_SECRET in the compose env file}"
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      PGSSL: "false"
+      BUSCACAMPUS_UPLOADS_DIR: /var/lib/buscacampus/uploads
+      BUSCACAMPUS_PRIVATE_UPLOADS_DIR: /var/lib/buscacampus/private_uploads
+    volumes:
+      - report-uploads:/var/lib/buscacampus/uploads
+      - claim-evidence:/var/lib/buscacampus/private_uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    restart: unless-stopped
+
+  client:
+    build:
+      context: ..
+      dockerfile: client/Dockerfile
+      args:
+        VITE_API_URL: /api/v1
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  report-uploads:
+  claim-evidence:
