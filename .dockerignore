@@ -1,0 +1,10 @@
+.git
+**/node_modules
+**/dist
+**/.env
+.env
+server/uploads/*
+server/private_uploads/
+Demo Web Avance 2/
+client/playwright-report/
+client/test-results/
