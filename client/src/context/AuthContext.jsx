@@ -48,9 +48,10 @@ export function AuthProvider({ children }) {
     return api.register(details);
   }, []);
 
-  const signOut = useCallback(async () => {
+  const signOut = useCallback(async (beforeSessionClear) => {
     setError(null);
     await api.logout();
+    beforeSessionClear?.();
     setUser(null);
     setStatus("anonymous");
   }, []);

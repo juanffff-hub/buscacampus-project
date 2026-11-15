@@ -21,8 +21,7 @@ export default function Navbar() {
     setLogoutError(null);
     setIsLoggingOut(true);
     try {
-      await logout();
-      navigate("/", { replace: true });
+      await logout(() => navigate("/", { replace: true }));
     } catch (error) {
       setLogoutError(error.message || "No fue posible cerrar la sesión.");
     } finally {
