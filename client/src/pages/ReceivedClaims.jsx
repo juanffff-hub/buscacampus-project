@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import ClaimEvidence from "../components/ClaimEvidence.jsx";
 import { decideClaim, getClaim, getReceivedClaims } from "../services/api.js";
@@ -25,6 +25,7 @@ export default function ReceivedClaims() {
   const [detailsError, setDetailsError] = useState(null);
   const [decidingId, setDecidingId] = useState(null);
   const [notice, setNotice] = useState(null);
+  const detailsRequest = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -49,32 +50,45 @@ export default function ReceivedClaims() {
   }, [retry, page]);
 
   async function loadDetails(claimId) {
+    const requestId = ++detailsRequest.current;
     setExpandedId(claimId);
     setDetails(null);
     setDetailsError(null);
     setDetailsLoading(true);
     try {
       const result = await getClaim(claimId);
-      setDetails(result.reclamacion);
+      if (detailsRequest.current === requestId) setDetails(result.reclamacion);
     } catch (requestError) {
-      setDetailsError(requestError);
+      if (detailsRequest.current === requestId) setDetailsError(requestError);
     } finally {
-      setDetailsLoading(false);
+      if (detailsRequest.current === requestId) setDetailsLoading(false);
     }
   }
 
   async function toggleDetails(claimId) {
     if (String(expandedId) === String(claimId)) {
+      detailsRequest.current += 1;
       setExpandedId(null);
       setDetails(null);
       setDetailsError(null);
+      setDetailsLoading(false);
       return;
     }
     await loadDetails(claimId);
   }
 
+  function changePage(nextPage) {
+    detailsRequest.current += 1;
+    setExpandedId(null);
+    setDetails(null);
+    setDetailsError(null);
+    setDetailsLoading(false);
+    setPage(nextPage);
+  }
+
   async function handleDecision(claim, estado) {
     const action = estado === "Aprobada" ? "aprobar" : "rechazar";
+    if (decidingId !== null) return;
     const consequence = estado === "Aprobada"
       ? "El reporte quedará devuelto y las demás solicitudes pendientes se rechazarán."
       : "La reclamación quedará rechazada; el reporte se publicará si no quedan solicitudes activas.";
@@ -87,8 +101,10 @@ export default function ReceivedClaims() {
     try {
       await decideClaim(claim.id, estado);
       setNotice({ type: "success", text: estado === "Aprobada" ? "Reclamación aprobada y reporte actualizado." : "Reclamación rechazada y reporte actualizado." });
+      detailsRequest.current += 1;
       setExpandedId(null);
       setDetails(null);
+      setDetailsLoading(false);
       setPage(1);
       setRetry((value) => value + 1);
     } catch (requestError) {
@@ -148,11 +164,11 @@ export default function ReceivedClaims() {
                     </Link>
                   </div>
                   {claim.estado === "Pendiente" && (
-                    <div className="received-claim-actions">
+                    <div className="received-claim-actions" aria-label={`Decisión para la reclamación ${claim.id}`}>
                       <button
                         type="button"
                         className="button button-primary"
-                        disabled={decidingId === claim.id}
+                        disabled={decidingId !== null}
                         onClick={() => void handleDecision(claim, "Aprobada")}
                       >
                         {decidingId === claim.id ? "Guardando…" : "Aprobar devolución"}
@@ -160,7 +176,7 @@ export default function ReceivedClaims() {
                       <button
                         type="button"
                         className="button button-outline"
-                        disabled={decidingId === claim.id}
+                        disabled={decidingId !== null}
                         onClick={() => void handleDecision(claim, "Rechazada")}
                       >
                         Rechazar
@@ -171,12 +187,18 @@ export default function ReceivedClaims() {
                     className="claim-details-toggle"
                     type="button"
                     aria-expanded={String(expandedId) === String(claim.id)}
+                    aria-controls={`received-claim-details-${claim.id}`}
                     onClick={() => void toggleDetails(claim.id)}
                   >
                     {String(expandedId) === String(claim.id) ? "Ocultar detalle" : "Ver mensaje y evidencia"}
                   </button>
-                  {String(expandedId) === String(claim.id) && (
-                    <div className="claim-history-details">
+                  <div
+                    id={`received-claim-details-${claim.id}`}
+                    className="claim-history-details"
+                    hidden={String(expandedId) !== String(claim.id)}
+                  >
+                    {String(expandedId) === String(claim.id) && (
+                      <>
                       {detailsLoading ? (
                         <p role="status">Cargando detalle…</p>
                       ) : detailsError ? (
@@ -191,16 +213,17 @@ export default function ReceivedClaims() {
                           <ClaimEvidence claimId={claim.id} evidence={details.evidencia} />
                         </>
                       ) : null}
-                    </div>
-                  )}
+                      </>
+                    )}
+                  </div>
                 </article>
               ))}
             </div>
-            <div className="claims-pagination" aria-label="Paginación de reclamaciones recibidas">
-              <button type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Anterior</button>
-              <span>Página {page} de {pageCount}</span>
-              <button type="button" disabled={page >= pageCount} onClick={() => setPage((value) => value + 1)}>Siguiente</button>
-            </div>
+            <nav className="claims-pagination" aria-label="Paginación de reclamaciones recibidas">
+              <button type="button" aria-label="Ir a la página anterior" disabled={page <= 1} onClick={() => changePage(page - 1)}>Anterior</button>
+              <span aria-live="polite" aria-atomic="true">Página {page} de {pageCount}</span>
+              <button type="button" aria-label="Ir a la página siguiente" disabled={page >= pageCount} onClick={() => changePage(page + 1)}>Siguiente</button>
+            </nav>
           </>
         )}
       </div>

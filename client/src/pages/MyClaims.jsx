@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import ClaimEvidence from "../components/ClaimEvidence.jsx";
 import { getClaim, getMyClaims } from "../services/api.js";
@@ -23,6 +23,7 @@ export default function MyClaims() {
   const [details, setDetails] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState(null);
+  const detailsRequest = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -46,28 +47,40 @@ export default function MyClaims() {
   }, [page, retry]);
 
   async function loadDetails(claimId) {
+    const requestId = ++detailsRequest.current;
     setExpandedId(claimId);
     setDetails(null);
     setDetailsError(null);
     setDetailsLoading(true);
     try {
       const result = await getClaim(claimId);
-      setDetails(result.reclamacion);
+      if (detailsRequest.current === requestId) setDetails(result.reclamacion);
     } catch (requestError) {
-      setDetailsError(requestError);
+      if (detailsRequest.current === requestId) setDetailsError(requestError);
     } finally {
-      setDetailsLoading(false);
+      if (detailsRequest.current === requestId) setDetailsLoading(false);
     }
   }
 
   async function toggleDetails(claimId) {
     if (String(expandedId) === String(claimId)) {
+      detailsRequest.current += 1;
       setExpandedId(null);
       setDetails(null);
       setDetailsError(null);
+      setDetailsLoading(false);
       return;
     }
     await loadDetails(claimId);
+  }
+
+  function changePage(nextPage) {
+    detailsRequest.current += 1;
+    setExpandedId(null);
+    setDetails(null);
+    setDetailsError(null);
+    setDetailsLoading(false);
+    setPage(nextPage);
   }
 
   return (
@@ -116,12 +129,18 @@ export default function MyClaims() {
                     className="claim-details-toggle"
                     type="button"
                     aria-expanded={String(expandedId) === String(claim.id)}
+                    aria-controls={`my-claim-details-${claim.id}`}
                     onClick={() => void toggleDetails(claim.id)}
                   >
                     {String(expandedId) === String(claim.id) ? "Ocultar detalle" : "Ver detalle y evidencia"}
                   </button>
-                  {String(expandedId) === String(claim.id) && (
-                    <div className="claim-history-details">
+                  <div
+                    id={`my-claim-details-${claim.id}`}
+                    className="claim-history-details"
+                    hidden={String(expandedId) !== String(claim.id)}
+                  >
+                    {String(expandedId) === String(claim.id) && (
+                      <>
                       {detailsLoading ? (
                         <p role="status">Cargando detalle…</p>
                       ) : detailsError ? (
@@ -136,24 +155,26 @@ export default function MyClaims() {
                           <ClaimEvidence claimId={claim.id} evidence={details.evidencia} />
                         </>
                       ) : null}
-                    </div>
-                  )}
+                      </>
+                    )}
+                  </div>
                 </article>
               ))}
             </div>
-            <div className="claims-pagination" aria-label="Paginación de reclamaciones">
-              <button type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>
+            <nav className="claims-pagination" aria-label="Paginación de mis reclamaciones">
+              <button type="button" aria-label="Ir a la página anterior" disabled={page <= 1} onClick={() => changePage(page - 1)}>
                 Anterior
               </button>
               <span>Página {pagination.page || page} de {Math.max(1, pagination.totalPages || 1)}</span>
               <button
                 type="button"
+                aria-label="Ir a la página siguiente"
                 disabled={page >= (pagination.totalPages || 1)}
-                onClick={() => setPage((value) => value + 1)}
+                onClick={() => changePage(page + 1)}
               >
                 Siguiente
               </button>
-            </div>
+            </nav>
           </>
         )}
       </div>
