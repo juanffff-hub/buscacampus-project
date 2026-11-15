@@ -44,6 +44,8 @@ function makeClaimDb({ report = {}, duplicate = false, failEvidence = false, mis
       ownerId: '7',
       type: 'Encontrado',
       status: 'Publicado',
+      reportTitle: 'Termo encontrado',
+      authorName: 'Ana Autora',
       ...report,
     },
     claim: null,
@@ -66,12 +68,14 @@ function makeClaimDb({ report = {}, duplicate = false, failEvidence = false, mis
             snapshot = { claim: state.claim, evidence: state.evidence, status: state.report?.status };
             return { rows: [] };
           }
-          if (statement.includes('FROM reportes_objetos') && statement.endsWith('FOR UPDATE')) {
+          if (statement.includes('FROM reportes_objetos') && /FOR UPDATE(?: OF reportes_objetos)?$/.test(statement)) {
             return { rows: state.report ? [{
               id: state.report.id,
               ownerId: state.report.ownerId,
               type: state.report.type,
               status: state.report.status,
+              reportTitle: state.report.reportTitle,
+              authorName: state.report.authorName,
             }] : [] };
           }
           if (statement.startsWith('INSERT INTO reclamaciones ')) {
@@ -188,9 +192,21 @@ test('POST /api/v1/reportes/:id/reclamaciones guarda reclamación y evidencia co
       assert.equal(body.success, true);
       assert.equal(body.data.reclamacion.id, '301');
       assert.equal(body.data.reclamacion.estado, 'Pendiente');
+      assert.deepEqual(body.data.reclamacion.reclamante, {
+        id: '8',
+        nombreCompleto: 'Diego Pérez',
+      });
+      assert.deepEqual(body.data.reclamacion.reporte, {
+        id: '91',
+        titulo: 'Termo encontrado',
+        tipoReporte: 'Encontrado',
+        estado: 'En reclamación',
+        autor: { id: '7', nombreCompleto: 'Ana Autora' },
+      });
       assert.equal(body.data.reclamacion.evidencia.nombreOriginal, 'marca.png');
       assert.equal(body.data.reclamacion.evidencia.mimeType, 'image/png');
       assert.equal(body.data.reclamacion.evidencia.pesoBytes, PNG_BYTES.length);
+      assert.equal(body.data.reclamacion.evidencia.endpoint, '/api/v1/reclamaciones/301/evidencia');
       assert.doesNotMatch(JSON.stringify(body), /nombreFisico|ubicacionInterna|private_uploads|[A-Z]:\\/i);
       assert.equal(db.state.report.status, 'En reclamación');
       assert.equal(db.state.claim.reclamanteId, '8');
@@ -200,7 +216,7 @@ test('POST /api/v1/reportes/:id/reclamaciones guarda reclamación y evidencia co
       assert.deepEqual(db.state.calls.map(call => call.statement.split(' ')[0]), [
         'BEGIN', 'SELECT', 'INSERT', 'INSERT', 'UPDATE', 'COMMIT',
       ]);
-      assert.match(db.state.calls[1].statement, /FOR UPDATE$/);
+      assert.match(db.state.calls[1].statement, /FOR UPDATE OF reportes_objetos$/);
       assert.equal(db.state.released, true);
       assert.deepEqual(await fs.readFile(resolvePrivateEvidencePath(filename)), PNG_BYTES);
     })));

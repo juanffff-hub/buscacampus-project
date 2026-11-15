@@ -17,6 +17,7 @@ async function create(req, res) {
     const reclamacion = await claimService.createClaim({
       reportId,
       userId: req.user.id,
+      claimant: req.user,
       message: input.mensajePrueba,
       uploadedFile: req.file,
     });

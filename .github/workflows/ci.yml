@@ -33,8 +33,11 @@ jobs:
       JWT_SECRET: ci-only-secret-with-at-least-32-random-looking-characters
       JWT_EXPIRES_IN: 20m
       COOKIE_SECURE: "false"
-      CLIENT_ORIGIN: http://localhost:4173
       POSTGRES_PASSWORD: ci-only-password
+      PUBLIC_DOMAIN: buscacampus.example.edu
+      PUBLIC_ORIGIN: https://buscacampus.example.edu
+      REPORT_UPLOADS_PATH: /tmp/buscacampus-uploads
+      CLAIM_EVIDENCE_PATH: /tmp/buscacampus-private_uploads
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -63,5 +66,7 @@ jobs:
         run: npm run test:e2e --prefix client
       - name: Validate local container configuration
         run: docker compose --env-file deploy/.env.example -f deploy/docker-compose.yml config --quiet
+      - name: Validate production HTTPS configuration
+        run: docker compose --env-file deploy/.env.production.example -f deploy/docker-compose.production.yml config --quiet
       - name: Build API and client images
         run: docker compose --env-file deploy/.env.example -f deploy/docker-compose.yml build

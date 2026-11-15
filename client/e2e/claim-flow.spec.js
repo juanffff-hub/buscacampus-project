@@ -67,6 +67,7 @@ test("dos usuarios publican, reclaman, deciden y consultan evidencia privada tra
     await expect(author).toHaveURL(/\/$/);
 
     await createAccount(claimant, "Reclamante de prueba", claimantEmail);
+    await signIn(claimant, claimantEmail);
     await visitor.goto(reportPath);
     await visitor.getByRole("link", { name: "Reclamar este objeto" }).click();
     await expect(visitor).toHaveURL(/\/login$/);

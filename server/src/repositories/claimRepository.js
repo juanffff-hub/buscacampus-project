@@ -47,7 +47,7 @@ function validateClaimableReport(report, userId) {
   }
 }
 
-async function createClaim({ reportId, userId, message, evidence }) {
+async function createClaim({ reportId, userId, claimant, message, evidence }) {
   const client = await pool.connect();
   let transactionOpen = false;
   try {
@@ -55,13 +55,16 @@ async function createClaim({ reportId, userId, message, evidence }) {
     transactionOpen = true;
 
     const lockedReport = await client.query(
-      `SELECT id::text AS id,
-              usuario_creador_id::text AS "ownerId",
-              tipo_reporte AS "type",
-              estado AS "status"
+      `SELECT reportes_objetos.id::text AS id,
+              reportes_objetos.usuario_creador_id::text AS "ownerId",
+              reportes_objetos.tipo_reporte AS "type",
+              reportes_objetos.estado AS "status",
+              reportes_objetos.titulo AS "reportTitle",
+              owner.nombre_completo AS "authorName"
        FROM reportes_objetos
-       WHERE id = $1
-       FOR UPDATE`,
+       JOIN usuarios AS owner ON owner.id = reportes_objetos.usuario_creador_id
+       WHERE reportes_objetos.id = $1
+       FOR UPDATE OF reportes_objetos`,
       [reportId],
     );
     const report = lockedReport.rows[0];
@@ -128,14 +131,18 @@ async function createClaim({ reportId, userId, message, evidence }) {
     transactionOpen = false;
     return {
       ...claim,
-      evidencia: {
-        id: metadata.id,
-        nombreOriginal: metadata.nombreOriginal,
-        mimeType: metadata.mimeType,
-        extension: metadata.extension,
-        pesoBytes: Number(metadata.pesoBytes),
-        fechaSubida: metadata.fechaSubida,
-      },
+      reclamanteNombre: claimant.nombreCompleto,
+      reporteTitulo: report.reportTitle,
+      reporteTipo: report.type,
+      reporteEstado: 'En reclamación',
+      autorReporteId: report.ownerId,
+      autorReporteNombre: report.authorName,
+      evidenciaId: metadata.id,
+      evidenciaNombreOriginal: metadata.nombreOriginal,
+      evidenciaMimeType: metadata.mimeType,
+      evidenciaExtension: metadata.extension,
+      evidenciaPesoBytes: metadata.pesoBytes,
+      evidenciaFechaSubida: metadata.fechaSubida,
     };
   } catch (error) {
     if (transactionOpen) {
