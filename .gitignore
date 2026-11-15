@@ -6,6 +6,8 @@ server/.env
 server/uploads/*
 !server/uploads/.gitkeep
 server/private_uploads/
+client/playwright-report/
+client/test-results/
 *.log
 .DS_Store
 
